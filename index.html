@@ -37,15 +37,15 @@
         // IMPORT AUTHENTICATION
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- NEW FIREBASE CONFIGURATION (IRSHAD SYSTEM 1234) ---
+        // --- NEW FIREBASE CONFIGURATION (IRSHAD MAIN PROJECT) ---
         const firebaseConfig = {
-            apiKey: "AIzaSyD0UOxJu-QY-9xwAzjs-ZcIb25TaH840Po",
-            authDomain: "irshad-system1234.firebaseapp.com",
-            projectId: "irshad-system1234",
-            storageBucket: "irshad-system1234.firebasestorage.app",
-            messagingSenderId: "113705140561",
-            appId: "1:113705140561:web:95146f5cac71d4ba6d9370",
-            measurementId: "G-V2F3BJ67PJ"
+            apiKey: "AIzaSyAo20H_NaIkqhtiLzylev2N3tI6VtEdff4",
+            authDomain: "irshad-main-project.firebaseapp.com",
+            projectId: "irshad-main-project",
+            storageBucket: "irshad-main-project.firebasestorage.app",
+            messagingSenderId: "904224619059",
+            appId: "1:904224619059:web:22c84c1cfc941240964146",
+            measurementId: "G-C5MVHNBBCL"
         };
         // ----------------------------------------
 
@@ -288,7 +288,7 @@
                         c.buyer.toLowerCase().includes(s) || 
                         c.seller.toLowerCase().includes(s) ||
                         c.customFields.some(f => f.value.toLowerCase().includes(s));
- 
+
                     let matchesDate = true;
                     if (startDate || endDate) {
                         const dateParts = c.timestamp.split(',')[0].split('/');
