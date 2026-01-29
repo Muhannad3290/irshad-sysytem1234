@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Enterprise Registry v5.0 (Secure Cloud)</title>
+    <title>IRSHAD SYSTEM | Enterprise Registry v5.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -22,9 +22,7 @@
         .table-container::-webkit-scrollbar-track { background: #f1f5f9; }
         .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .status-btn:active { transform: scale(0.95); }
-        .highlight-row { background-color: #E0F2FE !important; border: 2px solid #3B82F6 !important; transition: all 0.3s ease; }
         input, select, button { touch-action: manipulation; }
-        /* Login Background */
         .login-wrapper { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
     </style>
 </head>
@@ -33,11 +31,9 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        // IMPORT AUTHENTICATION
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- UPDATED FIREBASE CONFIGURATION (IRSHAD-SYSTEM11) ---
         const firebaseConfig = {
             apiKey: "AIzaSyAJmStws5WeTY0wJDlkikfB2Wxy9NJn-IQ",
             authDomain: "irshad-system11.firebaseapp.com",
@@ -47,20 +43,38 @@
             appId: "1:228065254339:web:50a1a7913905a26e08fb76",
             measurementId: "G-E9Z1JQ5TH5"
         };
-        // ----------------------------------------
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app); // Initialize Auth
+        const auth = getAuth(app);
 
         const { useState, useEffect, useRef, useMemo } = React;
+
+        const SYSTEM_FIELDS = [
+            { key: 'serialNo', label: 'Serial No' },
+            { key: 'reference', label: 'Reference' },
+            { key: 'institution', label: 'Institution' },
+            { key: 'caseType', label: 'Case Type' },
+            { key: 'remark', label: 'Remark' },
+            { key: 'buyerName', label: 'Buyer Name' },
+            { key: 'buyerId', label: 'Buyer ID' },
+            { key: 'buyerEmail', label: 'Buyer Email' },
+            { key: 'buyerPhone', label: 'Buyer Phone' },
+            { key: 'sellerName', label: 'Seller Name' },
+            { key: 'sellerId', label: 'Seller ID' },
+            { key: 'sellerEmail', label: 'Seller Email' },
+            { key: 'sellerPhone', label: 'Seller Phone' },
+            { key: 'status', label: 'Current Status' },
+            { key: 'processor', label: 'Processor' },
+            { key: 'dateReceived', label: 'Date Received' },
+            { key: 'dateHandover', label: 'Date Handover' }
+        ];
 
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name, size]);
             return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
         };
 
-        // --- LOGIN SCREEN COMPONENT ---
         const LoginScreen = () => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -82,27 +96,26 @@
                 <div className="min-h-screen login-wrapper flex items-center justify-center p-6">
                     <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 text-center animate-in zoom-in duration-500">
                         <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg rotate-3">
-                            <i data-lucide="shield-check" style={{width:40, height:40}}></i>
+                            <Icon name="shield-check" size={40} />
                         </div>
                         <h1 className="text-2xl font-black text-slate-800 tracking-tight mb-2">IRSHAD SYSTEM</h1>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Secure Access Required</p>
-                        
                         <form onSubmit={handleLogin} className="space-y-4 text-left">
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Login ID</label>
                                 <div className="relative">
-                                    <i data-lucide="user" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" style={{width:18, height:18}}></i>
+                                    <Icon name="user" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                     <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-2 focus:ring-blue-100 transition-all" placeholder="Enter ID" required/>
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Password</label>
                                 <div className="relative">
-                                    <i data-lucide="lock" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" style={{width:18, height:18}}></i>
+                                    <Icon name="lock" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                     <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-2 focus:ring-blue-100 transition-all" placeholder="••••••" required/>
                                 </div>
                             </div>
-                            {error && <div className="p-3 bg-red-50 text-red-500 text-xs font-black rounded-xl text-center flex items-center justify-center gap-2"><i data-lucide="alert-circle" style={{width:14}}></i>{error}</div>}
+                            {error && <div className="p-3 bg-red-50 text-red-500 text-xs font-black rounded-xl text-center flex items-center justify-center gap-2"><Icon name="alert-circle" size={14}/>{error}</div>}
                             <button disabled={loading} type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
                                 {loading ? 'Verifying...' : 'Access System'}
                             </button>
@@ -113,43 +126,39 @@
         };
 
         const App = () => {
-            // AUTH STATE
             const [user, setUser] = useState(null);
             const [authLoading, setAuthLoading] = useState(true);
-
-            // APP STATE
             const [cases, setCases] = useState([]);
             const [trash, setTrash] = useState([]);
-            
-            const [bankList, setBankList] = useState(['Global Bank', 'Central Trust', 'Federal Reserve']);
+            const [bankList, setBankList] = useState(['ADCB', 'Mashreq Bank', 'CBD', 'NBF', 'Ajman Bank', 'Dubai Islamic Bank']);
             const [statusList, setStatusList] = useState(['Pending', 'Under Process', 'Processed', 'Delivered']);
             const [customHeadings, setCustomHeadings] = useState([]);
-            
             const [currentView, setCurrentView] = useState('dashboard');
             const [selectedCase, setSelectedCase] = useState(null);
-
-            // Modals
             const [showModal, setShowModal] = useState(false);
             const [showSettings, setShowSettings] = useState(false);
             const [showReportModal, setShowReportModal] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
             const [reportFilters, setReportFilters] = useState({ bank: '', status: [] });
             const [isEditing, setIsEditing] = useState(false);
             const [search, setSearch] = useState('');
             const [startDate, setStartDate] = useState('');
             const [endDate, setEndDate] = useState('');
 
-            const [formData, setFormData] = useState({ 
-                siNo: '', bankName: '', buyer: '', seller: '', status: 'Pending', photo: null, customFields: [] 
-            });
+            const emptyForm = {
+                serialNo: '', reference: '', institution: '', caseType: 'Sale', remark: '',
+                buyerName: '', buyerId: '', buyerEmail: '', buyerPhone: '',
+                sellerName: '', sellerId: '', sellerEmail: '', sellerPhone: '',
+                status: 'Pending', processor: '', dateReceived: '', dateHandover: '',
+                photo: null, customData: {}
+            };
+            const [formData, setFormData] = useState(emptyForm);
 
             const [isCameraActive, setIsCameraActive] = useState(false);
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
 
-            // --- AUTH LISTENER ---
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
@@ -158,54 +167,38 @@
                 return () => unsubscribe();
             }, []);
 
-            // --- FIREBASE DATA LISTENERS (Only if Logged In) ---
             useEffect(() => {
-                if (!user) return; // Stop if not logged in
-
-                // 1. Listen to Cases
+                if (!user) return;
                 const qCases = query(collection(db, "cases"), orderBy("timestamp", "desc"));
                 const unsubscribeCases = onSnapshot(qCases, (snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                    setCases(data);
-                    if (selectedCase) {
-                        const updated = data.find(c => c.id === selectedCase.id);
-                        if (updated) setSelectedCase(updated);
-                    }
+                    setCases(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
                 });
-
-                // 2. Listen to Trash
                 const qTrash = query(collection(db, "trash"), orderBy("timestamp", "desc"));
                 const unsubscribeTrash = onSnapshot(qTrash, (snapshot) => {
                     setTrash(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
                 });
-
-                // 3. Listen to Settings
                 const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         if(data.banks) setBankList(data.banks);
                         if(data.statuses) setStatusList(data.statuses);
                         if(data.headings) setCustomHeadings(data.headings);
-                    } else {
-                        setDoc(doc(db, "settings", "global"), {
-                            banks: ['Global Bank', 'Central Trust', 'Federal Reserve'],
-                            statuses: ['Pending', 'Under Process', 'Processed', 'Delivered'],
-                            headings: []
-                        });
                     }
                 });
-
                 return () => { unsubscribeCases(); unsubscribeTrash(); unsubSettings(); };
-            }, [user]); // Re-run when user logs in
+            }, [user]);
 
-            // --- DATABASE ACTIONS ---
+            // AUTH ACTIONS
+            const handleLogout = () => { if(confirm("Logout?")) signOut(auth); };
 
-            const updateSettings = async (type, newList) => {
-                if(type === 'banks') setBankList(newList);
-                if(type === 'statuses') setStatusList(newList);
-                if(type === 'headings') setCustomHeadings(newList);
-                const settingDoc = doc(db, "settings", "global");
-                await setDoc(settingDoc, { [type]: newList }, { merge: true });
+            // DATABASE ACTIONS
+            const toggleStatus = async (caseId) => {
+                const caseItem = cases.find(c => c.id === caseId);
+                if (!caseItem) return;
+                const nextIdx = (statusList.indexOf(caseItem.status) + 1) % statusList.length;
+                const newStatus = statusList[nextIdx];
+                const now = new Date().toLocaleString('en-GB');
+                await updateDoc(doc(db, "cases", caseId), { status: newStatus, statusTimestamp: now });
             };
 
             const handleSave = async (e) => {
@@ -213,85 +206,137 @@
                 const timestamp = new Date().toLocaleString('en-GB');
                 try {
                     if (isEditing) {
-                        const caseRef = doc(db, "cases", formData.id);
                         const { id, ...dataToSave } = formData;
-                        await updateDoc(caseRef, dataToSave);
+                        await updateDoc(doc(db, "cases", id), dataToSave);
                     } else {
                         const { id, ...newEntry } = formData; 
-                        await addDoc(collection(db, "cases"), { 
-                            ...newEntry, timestamp, statusTimestamp: timestamp 
-                        });
+                        await addDoc(collection(db, "cases"), { ...newEntry, timestamp, statusTimestamp: timestamp });
                     }
                     closeModal();
-                } catch (error) { console.error("Error saving:", error); alert("Error saving data."); }
-            };
-
-            const toggleStatus = async (caseId) => {
-                const caseItem = cases.find(c => c.id === caseId);
-                if (!caseItem) return;
-                const nextIdx = (statusList.indexOf(caseItem.status) + 1) % statusList.length;
-                const newStatus = statusList[nextIdx];
-                const now = new Date().toLocaleString('en-GB');
-                const caseRef = doc(db, "cases", caseId);
-                await updateDoc(caseRef, { status: newStatus, statusTimestamp: now });
+                } catch (error) { alert("Error saving."); }
             };
 
             const softDelete = async (id) => {
-                if(confirm("Move this record to Recycle Bin?")) {
-                    const itemToDelete = cases.find(c => c.id === id);
-                    if(itemToDelete) {
-                        try {
-                            const { id: oldId, ...data } = itemToDelete;
-                            await addDoc(collection(db, "trash"), data);
-                            await deleteDoc(doc(db, "cases", id));
-                            if(currentView === 'details') setCurrentView('list');
-                        } catch (err) { alert("Error deleting."); }
-                    }
+                if(confirm("Move to Recycle Bin?")) {
+                    const item = cases.find(c => c.id === id);
+                    const { id: oldId, ...data } = item;
+                    await addDoc(collection(db, "trash"), { ...data, deletedAt: new Date().toLocaleString() });
+                    await deleteDoc(doc(db, "cases", id));
+                    if(currentView === 'details') setCurrentView('list');
                 }
             };
 
             const restoreItem = async (id) => {
                 const itemToRestore = trash.find(c => c.id === id);
                 if(itemToRestore) {
-                    try {
-                        const { id: oldId, ...data } = itemToRestore;
-                        await addDoc(collection(db, "cases"), data);
-                        await deleteDoc(doc(db, "trash", id));
-                    } catch (err) { alert("Error restoring."); }
+                    const { id: oldId, deletedAt, ...data } = itemToRestore;
+                    await addDoc(collection(db, "cases"), data);
+                    await deleteDoc(doc(db, "trash", id));
                 }
             };
 
             const permanentDelete = async (id) => {
-                if(confirm("Are you sure? This action cannot be undone.")) { 
-                    await deleteDoc(doc(db, "trash", id));
-                }
+                if(confirm("Permanent delete? Cannot be undone.")) await deleteDoc(doc(db, "trash", id));
             };
-            
-            // --- LOGOUT ---
-            const handleLogout = () => {
-                if(confirm("Are you sure you want to logout?")) {
-                    signOut(auth);
+
+            const resetSystem = async () => {
+                if(confirm("CRITICAL: This will delete ALL cloud records. Are you sure?")) {
+                    if(confirm("LAST WARNING: This action cannot be undone. Proceed?")) {
+                        const batch = writeBatch(db);
+                        const snapshot = await getDocs(collection(db, "cases"));
+                        snapshot.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                        alert("System reset successful.");
+                    }
                 }
             };
 
-            // --- UI HELPERS & EXPORTS (UNCHANGED) ---
-            const allUsedHeadings = useMemo(() => 
-                Array.from(new Set([...customHeadings, ...cases.flatMap(c => c.customFields.map(f => f.label))])), 
-            [cases, customHeadings]);
+            const updateSettings = async (type, newList) => {
+                const settingDoc = doc(db, "settings", "global");
+                await setDoc(settingDoc, { [type]: newList }, { merge: true });
+            };
+
+            // EXPORT LOGIC
+            const exportSinglePDF = (c) => {
+                const { jsPDF } = window.jspdf; 
+                const doc = new jsPDF('p', 'mm', 'a4');
+                doc.setFontSize(22); doc.setTextColor(30, 41, 59); doc.setFont("helvetica", "bold"); doc.text(`CASE RECORD #${c.serialNo}`, 14, 20);
+                doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.text(`Generated: ${new Date().toLocaleString('en-GB')}`, 14, 26);
+                
+                const body = SYSTEM_FIELDS.map(f => [f.label, c[f.key] || "-"]);
+                customHeadings.forEach(h => {
+                    body.push([h, (c.customData && c.customData[h]) || "-"]);
+                });
+
+                doc.autoTable({ body, startY: 35, theme: 'grid', headStyles: { fillColor: [59, 130, 246] } });
+                if (c.photo) {
+                    let finalY = doc.lastAutoTable.finalY + 10;
+                    if (finalY > 200) { doc.addPage(); finalY = 20; }
+                    doc.text("ATTACHED PROOF:", 14, finalY);
+                    doc.addImage(c.photo, 'JPEG', 14, finalY + 5, 80, 80);
+                }
+                doc.save(`Record_${c.serialNo}.pdf`);
+            };
+
+            const exportVaultPDF = () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l', 'mm', 'a4');
+                const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Received"]];
+                const body = filteredData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]);
+                doc.text("IRSHAD SYSTEM - RECORDS VAULT", 14, 15);
+                doc.autoTable({ head: header, body, startY: 22, theme: 'grid' });
+                doc.save("Vault_Registry.pdf");
+            };
+
+            const generateSpecificReport = (type) => {
+                const { bank, status } = reportFilters;
+                const targetData = cases.filter(c => (bank ? c.institution === bank : true) && (status.length > 0 ? status.includes(c.status) : true));
+                if (targetData.length === 0) return alert("No records found.");
+                if (type === 'excel') {
+                    const excelData = targetData.map(c => {
+                        const row = {};
+                        SYSTEM_FIELDS.forEach(f => row[f.label] = c[f.key] || "-");
+                        customHeadings.forEach(h => row[h] = (c.customData && c.customData[h]) || "-");
+                        return row;
+                    });
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Report");
+                    XLSX.writeFile(wb, `Report_${bank || 'All'}.xlsx`);
+                } else {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('l', 'mm', 'a4');
+                    doc.setFontSize(18); doc.text("OFFICIAL STATUS REPORT", 14, 20);
+                    doc.setFontSize(10); doc.text(`Criteria: Bank: ${bank || 'All'} | Status: ${status.join(', ') || 'All'}`, 14, 28);
+                    const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Processor"]];
+                    const body = targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.processor || "-"]);
+                    doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
+                    if (status.includes('Delivered')) {
+                        let y = doc.lastAutoTable.finalY + 30;
+                        doc.text("Prepared by: ____________", 20, y);
+                        doc.text("Received by: ____________", 120, y);
+                        doc.text("Date: ________________", 220, y);
+                    }
+                    doc.save("Targeted_Report.pdf");
+                }
+                setShowReportModal(false);
+            };
+
+            const toggleReportStatus = (s) => {
+                const current = [...reportFilters.status];
+                const idx = current.indexOf(s);
+                if (idx > -1) current.splice(idx, 1); else current.push(s);
+                setReportFilters({...reportFilters, status: current});
+            };
 
             const filteredData = useMemo(() => {
                 return cases.filter(c => {
                     const s = search.toLowerCase();
-                    const matchesSearch = 
-                        c.bankName.toLowerCase().includes(s) || 
-                        c.siNo.includes(s) || 
-                        c.buyer.toLowerCase().includes(s) || 
-                        c.seller.toLowerCase().includes(s) ||
-                        c.customFields.some(f => f.value.toLowerCase().includes(s));
-
+                    const matchesSearch = (c.institution || "").toLowerCase().includes(s) || (c.serialNo || "").toLowerCase().includes(s) || (c.reference || "").toLowerCase().includes(s) || (c.buyerName || "").toLowerCase().includes(s) || (c.sellerName || "").toLowerCase().includes(s);
+                    
                     let matchesDate = true;
                     if (startDate || endDate) {
-                        const dateParts = c.timestamp.split(',')[0].split('/');
+                        const dateParts = (c.timestamp || "").split(',')[0].split('/');
                         const caseDate = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
                         if (startDate) matchesDate = matchesDate && caseDate >= new Date(startDate);
                         if (endDate) matchesDate = matchesDate && caseDate <= new Date(endDate);
@@ -300,223 +345,89 @@
                 });
             }, [cases, search, startDate, endDate]);
 
-            const downloadTemplate = () => {
-                const headers = ["SI_NO", "BANK_NAME", "BUYER", "SELLER", "STATUS", ...customHeadings];
-                const exampleRow = ["1001", "Global Bank", "John Doe", "Jane Smith", "Pending", ...customHeadings.map(() => "Example Value")];
-                const worksheet = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Import_Template");
-                XLSX.writeFile(workbook, "Irshad_System_Import_Template.xlsx");
-            };
-
-            const handleBulkImport = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async (evt) => {
-                    try {
-                        const bstr = evt.target.result;
-                        const wb = XLSX.read(bstr, { type: 'binary' });
-                        const wsname = wb.SheetNames[0];
-                        const ws = wb.Sheets[wsname];
-                        const data = XLSX.utils.sheet_to_json(ws);
-                        if (data.length === 0) { alert("Excel file is empty!"); return; }
-                        const timestamp = new Date().toLocaleString('en-GB');
-                        let importedCount = 0;
-                        const batchPromises = data.map(async (row, index) => {
-                            const siNo = row["SI_NO"] || row["SI No"] || `AUTO-${Date.now()}-${index}`;
-                            const bankName = row["BANK_NAME"] || row["Bank Name"] || "Unknown Bank";
-                            const buyer = row["BUYER"] || row["Buyer"] || "-";
-                            const seller = row["SELLER"] || row["Seller"] || "-";
-                            const status = row["STATUS"] || row["Status"] || "Pending";
-                            const standardKeys = ["SI_NO", "SI No", "BANK_NAME", "Bank Name", "BUYER", "Buyer", "SELLER", "Seller", "STATUS", "Status"];
-                            const rowCustomFields = Object.keys(row).filter(key => !standardKeys.includes(key)).map(key => ({ label: key, value: String(row[key]) }));
-                            await addDoc(collection(db, "cases"), {
-                                siNo: String(siNo), bankName: String(bankName), buyer: String(buyer), seller: String(seller),
-                                status: statusList.includes(status) ? status : "Pending", photo: null, timestamp: timestamp,
-                                statusTimestamp: timestamp, customFields: rowCustomFields
-                            });
-                            importedCount++;
-                        });
-                        await Promise.all(batchPromises);
-                        alert(`Success! Imported records successfully to Cloud.`);
-                        setShowImportModal(false);
-                    } catch (error) { console.error(error); alert("Error parsing Excel or saving to cloud."); }
-                };
-                reader.readAsBinaryString(file);
-            };
-
-            const exportToExcel = () => { generateExcelFile(filteredData, `Irshad_System_Report_${new Date().toISOString().slice(0,10)}.xlsx`); };
-
-            const generateTargetedExcel = () => {
-                const { bank, status } = reportFilters;
-                if (!bank && status.length === 0) { alert("Please select at least one filter criterion."); return; }
-                const targetData = cases.filter(c => (bank ? c.bankName === bank : true) && (status.length > 0 ? status.includes(c.status) : true));
-                if (targetData.length === 0) { alert("No records found for these criteria."); return; }
-                generateExcelFile(targetData, `Specific_Report_${bank || 'All'}_${new Date().toISOString().slice(0,10)}.xlsx`);
-                setShowReportModal(false);
-            };
-
-            const generateExcelFile = (dataToExport, fileName) => {
-                const excelData = dataToExport.map(c => {
-                    const row = { "SERIAL NO": c.siNo, "DATE & TIME": c.timestamp, "BANK NAME": c.bankName, "BUYER NAME": c.buyer, "SELLER NAME": c.seller, "STATUS": c.status.toUpperCase(), "LAST UPDATE": c.statusTimestamp || c.timestamp };
-                    allUsedHeadings.forEach(h => { const field = c.customFields.find(f => f.label === h); row[h.toUpperCase()] = field ? field.value : "-"; });
-                    return row;
-                });
-                const worksheet = XLSX.utils.json_to_sheet(excelData);
-                const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1E293B" } }, alignment: { horizontal: "center", vertical: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-                const cellStyle = { font: { name: "Arial", sz: 10 }, alignment: { horizontal: "left", vertical: "center" }, border: { top: { style: "thin", color: { rgb: "E2E8F0" } }, bottom: { style: "thin", color: { rgb: "E2E8F0" } }, left: { style: "thin", color: { rgb: "E2E8F0" } }, right: { style: "thin", color: { rgb: "E2E8F0" } } } };
-                const range = XLSX.utils.decode_range(worksheet['!ref']);
-                const colWidths = [];
-                for (let C = range.s.c; C <= range.e.c; ++C) {
-                    let maxWidth = 10;
-                    for (let R = range.s.r; R <= range.e.r; ++R) {
-                        const cellRef = XLSX.utils.encode_cell({c: C, r: R});
-                        if (!worksheet[cellRef]) continue;
-                        if (R === 0) { worksheet[cellRef].s = headerStyle; } else { worksheet[cellRef].s = cellStyle; }
-                        const cellValue = worksheet[cellRef].v ? String(worksheet[cellRef].v) : "";
-                        if (cellValue.length > maxWidth) maxWidth = cellValue.length;
-                    }
-                    colWidths.push({ wch: Math.min(maxWidth + 5, 50) });
-                }
-                worksheet['!cols'] = colWidths;
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Registry_Report");
-                XLSX.writeFile(workbook, fileName);
-            };
-
-            const exportSinglePDF = (c) => {
-                const { jsPDF } = window.jspdf; const doc = new jsPDF('p', 'mm', 'a4');
-                doc.setFontSize(22); doc.setTextColor(30, 41, 59); doc.setFont("helvetica", "bold"); doc.text(`CASE RECORD #${c.siNo}`, 14, 20);
-                doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal"); doc.text(`Generated: ${new Date().toLocaleString('en-GB')}`, 14, 26);
-                doc.setDrawColor(200, 200, 200); doc.setFillColor(240, 240, 240); doc.roundedRect(14, 30, 50, 10, 2, 2, 'FD');
-                doc.setTextColor(50, 50, 50); doc.setFont("helvetica", "bold"); doc.text(`Status: ${c.status}`, 16, 36);
-                const body = [["Bank Name", c.bankName], ["Buyer Name", c.buyer], ["Seller Name", c.seller], ["Date Created", c.timestamp], ["Last Update", c.statusTimestamp || c.timestamp]];
-                c.customFields.forEach(f => body.push([f.label, f.value]));
-                doc.autoTable({ body: body, startY: 45, theme: 'grid', headStyles: { fillColor: [59, 130, 246] }, columnStyles: { 0: { fontStyle: 'bold', width: 60, fillColor: [245, 245, 245] }, 1: { width: 110 } } });
-                if (c.photo) {
-                    let finalY = doc.lastAutoTable.finalY + 10; if (finalY > 200) { doc.addPage(); finalY = 20; }
-                    doc.setFontSize(12); doc.setTextColor(30, 41, 59); doc.setFont("helvetica", "bold"); doc.text("ATTACHED PROOF:", 14, finalY);
-                    try { doc.addImage(c.photo, 'JPEG', 14, finalY + 5, 100, 100); } catch(e) {}
-                }
-                doc.save(`Record_${c.siNo}.pdf`);
-            };
-
-            const exportToPDF = () => {
-                const { jsPDF } = window.jspdf; const doc = new jsPDF('l', 'mm', 'a4');
-                const header = [["SI No", "Date", "Bank", "Buyer", "Seller", "Status", ...allUsedHeadings]];
-                const body = filteredData.map(c => {
-                    const row = [c.siNo, c.timestamp, c.bankName, c.buyer, c.seller, c.status];
-                    allUsedHeadings.forEach(h => { const field = c.customFields.find(f => f.label === h); row.push(field ? field.value : "-"); });
-                    return row;
-                });
-                doc.setFontSize(16); doc.setTextColor(59, 130, 246); doc.text("IRSHAD SYSTEM - Enterprise Registry Report", 14, 15);
-                doc.autoTable({ head: header, body: body, startY: 22, theme: 'grid' });
-                doc.save("Irshad_Registry_Report.pdf");
-            };
-
-            const generateTargetedPDF = () => {
-                const { bank, status } = reportFilters;
-                if (!bank && status.length === 0) { alert("Please select at least one filter criterion."); return; }
-                const targetData = cases.filter(c => (bank ? c.bankName === bank : true) && (status.length > 0 ? status.includes(c.status) : true));
-                if (targetData.length === 0) { alert("No records found for these criteria."); return; }
-                const { jsPDF } = window.jspdf; const doc = new jsPDF('l', 'mm', 'a4');
-                const date = new Date().toLocaleString('en-GB');
-                doc.setFontSize(22); doc.setTextColor(30, 41, 59); doc.setFont("helvetica", "bold"); doc.text("OFFICIAL STATUS REPORT", 14, 20);
-                doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal"); doc.text(`Generated: ${date}`, 14, 26);
-                doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252); doc.roundedRect(14, 32, 270, 25, 3, 3, 'FD');
-                doc.setFontSize(11); doc.setTextColor(59, 130, 246); doc.setFont("helvetica", "bold"); doc.text("REPORT CRITERIA:", 20, 48);
-                doc.setTextColor(30, 41, 59); doc.text(`BANK: ${bank || 'All Banks'}`, 70, 48);
-                const statusText = status.length > 0 ? status.join(', ') : 'All Statuses'; doc.text(`STATUS: ${statusText}`, 150, 48, { maxWidth: 100 });
-                const header = [["SI No", "Date", "Bank", "Buyer", "Seller", "Status", ...allUsedHeadings]];
-                const body = targetData.map(c => {
-                    const row = [c.siNo, c.timestamp, c.bankName, c.buyer, c.seller, c.status];
-                    allUsedHeadings.forEach(h => { const field = c.customFields.find(f => f.label === h); row.push(field ? field.value : "-"); });
-                    return row;
-                });
-                doc.autoTable({ head: header, body: body, startY: 65, theme: 'grid' });
-                const hasDelivered = status.some(s => s.toLowerCase() === "delivered");
-                if (hasDelivered) {
-                    let finalY = doc.lastAutoTable.finalY; if (finalY > 150) { doc.addPage(); finalY = 20; }
-                    const sigY = finalY + 40; doc.setFontSize(10); doc.setTextColor(30, 41, 59); doc.setFont("helvetica", "bold");
-                    doc.text("Prepared by:", 30, sigY); doc.line(30, sigY + 15, 80, sigY + 15);
-                    doc.text("Delivered by:", 120, sigY); doc.line(120, sigY + 15, 170, sigY + 15);
-                    doc.text("Received by:", 210, sigY); doc.line(210, sigY + 15, 260, sigY + 15);
-                }
-                doc.save(`Report_${bank || 'All'}_Filtered.pdf`);
-                setShowReportModal(false);
-            };
-
-            const openNewEntry = () => { setIsEditing(false); const defaultFields = customHeadings.map(h => ({ label: h, value: '' })); setFormData({ siNo: '', bankName: bankList[0], buyer: '', seller: '', status: statusList[0], photo: null, customFields: defaultFields }); setShowModal(true); };
+            const openNewEntry = () => { setIsEditing(false); setFormData(emptyForm); setShowModal(true); };
             const closeModal = () => { setShowModal(false); setIsEditing(false); };
-            const openCamera = async () => { setIsCameraActive(true); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { alert("Camera Error: Ensure you are using HTTPS or localhost."); setIsCameraActive(false); } };
+            const openCamera = async () => { setIsCameraActive(true); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { alert("Camera Error."); setIsCameraActive(false); } };
             const snap = () => { const canvas = canvasRef.current; const video = videoRef.current; canvas.width = video.videoWidth; canvas.height = video.videoHeight; canvas.getContext('2d').drawImage(video, 0, 0); setFormData({ ...formData, photo: canvas.toDataURL('image/jpeg', 0.5) }); video.srcObject.getTracks().forEach(t => t.stop()); setIsCameraActive(false); };
-            const handleNavClick = (view) => { setCurrentView(view); setIsMobileMenuOpen(false); };
 
-            // Conditional Rendering for Login
-            if (authLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse bg-slate-900">INITIALIZING...</div>;
+            if (authLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 bg-slate-900">SYSTEM LOADING...</div>;
             if (!user) return <LoginScreen />;
 
             return (
                 <div className="min-h-screen flex flex-col md:flex-row relative">
-                    {/* MOBILE HEADER */}
-                    <div className="md:hidden bg-white p-4 border-b flex justify-between items-center sticky top-0 z-40 shadow-sm">
-                        <div className="font-black text-lg text-slate-800 flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Icon name="cpu" size={16} /></div>IRSHAD SYS (Cloud)</div>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600"><Icon name={isMobileMenuOpen ? "x" : "menu"} size={24} /></button>
-                    </div>
-
                     {/* SIDEBAR */}
                     <aside className={`no-print w-72 bg-white border-r flex-col p-6 h-screen z-50 transition-transform duration-300 md:translate-x-0 fixed md:sticky top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:flex'}`}>
-                        <div className="hidden md:flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800"><div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>IRSHAD <span className="text-blue-600">SYSTEM</span></div>
+                        <div className="flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800"><div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>IRSHAD <span className="text-blue-600">SYSTEM</span></div>
                         <div className="space-y-1">
-                            <SidebarLink active={currentView === 'dashboard'} onClick={() => handleNavClick('dashboard')} icon="layout" label="Dashboard" />
-                            <SidebarLink active={currentView === 'list'} onClick={() => handleNavClick('list')} icon="database" label="Records Vault" />
-                            <SidebarLink active={currentView === 'trash'} onClick={() => handleNavClick('trash')} icon="trash-2" label="Recycle Bin" />
+                            <SidebarLink active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setIsMobileMenuOpen(false);}} icon="layout" label="Dashboard" />
+                            <SidebarLink active={currentView === 'list'} onClick={() => {setCurrentView('list'); setIsMobileMenuOpen(false);}} icon="database" label="Records Vault" />
+                            <SidebarLink active={currentView === 'trash'} onClick={() => {setCurrentView('trash'); setIsMobileMenuOpen(false);}} icon="trash-2" label="Recycle Bin" />
                             <SidebarLink active={showSettings} onClick={() => { setShowSettings(true); setIsMobileMenuOpen(false); }} icon="settings" label="Categories" />
                         </div>
                         <div className="mt-auto pt-4 border-t space-y-2">
-                            <button onClick={() => { setShowImportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 hover:bg-slate-200"><Icon name="upload-cloud" size={16}/> Bulk Import</button>
+                            <button onClick={() => { setShowImportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-2"><Icon name="upload-cloud" size={16}/> Bulk Import</button>
+                            <button onClick={() => { setShowReportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md"><Icon name="file-text" size={16}/> Specific Report</button>
                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={exportToExcel} className="w-full py-3 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1"><Icon name="file-spreadsheet" size={14}/> Excel</button>
-                                <button onClick={exportToPDF} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1"><Icon name="printer" size={14}/> PDF</button>
+                                <button onClick={() => generateSpecificReport('excel')} className="py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase">Excel</button>
+                                <button onClick={exportVaultPDF} className="py-2 bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase">PDF</button>
                             </div>
-                            <button onClick={() => { setReportFilters({bank: '', status: []}); setShowReportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors"><Icon name="file-text" size={16}/> Specific Report</button>
-                            <button onClick={() => { openNewEntry(); setIsMobileMenuOpen(false); }} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl hover:bg-blue-700 transition-all mt-2 flex items-center justify-center gap-2"><Icon name="plus" /> New Entry</button>
-                            {/* LOGOUT BUTTON ADDED HERE */}
-                            <button onClick={handleLogout} className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-black shadow-sm mt-2 flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"><Icon name="log-out" size={16}/> Logout</button>
+                            <button onClick={openNewEntry} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl mt-2 flex items-center justify-center gap-2"><Icon name="plus" /> New Entry</button>
+                            <button onClick={resetSystem} className="w-full py-2 bg-red-50 text-red-500 rounded-lg text-[10px] font-black uppercase mt-4 hover:bg-red-500 hover:text-white transition-all">Reset System</button>
+                            <button onClick={handleLogout} className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-xs font-black mt-2 flex items-center justify-center gap-2 hover:bg-red-50 hover:text-red-600 transition-colors"><Icon name="log-out" size={16}/> Logout</button>
                         </div>
                     </aside>
 
-                    {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden"></div>}
+                    {/* MOBILE TOGGLE */}
+                    <div className="md:hidden bg-white p-4 border-b flex justify-between items-center sticky top-0 z-40 shadow-sm no-print">
+                        <div className="font-black text-lg text-slate-800">IRSHAD SYSTEM</div>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2"><Icon name={isMobileMenuOpen ? "x" : "menu"} size={24} /></button>
+                    </div>
 
                     <main className="flex-1 p-4 md:p-10 pb-24 overflow-x-hidden">
                         {currentView === 'dashboard' && (
-                            <div className="space-y-6 animate-in fade-in duration-500">
-                                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm w-full md:max-w-xs">
-                                    <h2 className="font-bold text-slate-800 text-xs mb-3 uppercase tracking-tight flex items-center gap-2"><Icon name="pie-chart" size={14} className="text-blue-600"/> Analytics</h2>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-separate border-spacing-0">
-                                            <thead><tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="pb-2 pl-2 border-b">Status</th><th className="pb-2 text-right pr-2 border-b">Count</th></tr></thead>
-                                            <tbody className="divide-y divide-slate-50">
-                                                <tr className="group hover:bg-slate-50 transition-colors"><td className="py-2 pl-2 font-black text-slate-800 flex items-center gap-2 text-[10px]"><div className="p-1 bg-slate-100 rounded text-slate-600"><Icon name="layers" size={10} /></div>TOTAL</td><td className="py-2 text-right pr-2 font-black text-xs text-slate-900">{cases.length}</td></tr>
-                                                {statusList.map(st => (<tr key={st} className="group hover:bg-slate-50 transition-colors"><td className="py-2 pl-2 font-bold text-slate-600 flex items-center gap-2 text-[10px]"><div className={`w-5 h-5 rounded flex items-center justify-center ${st === 'Processed' ? 'bg-emerald-100 text-emerald-600' : st === 'Pending' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}><Icon name="activity" size={10} /></div>{st}</td><td className="py-2 text-right pr-2 font-bold text-xs text-slate-700">{cases.filter(c => c.status === st).length}</td></tr>))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <StatsCard label="TOTAL CASES" value={cases.length} color="slate" />
+                                    <StatsCard label="PENDING" value={cases.filter(c=>c.status==='Pending').length} color="amber" />
+                                    <StatsCard label="DELIVERED" value={cases.filter(c=>c.status==='Delivered').length} color="emerald" />
+                                    <StatsCard label="PROCESSING" value={cases.filter(c=>c.status==='Under Process').length} color="blue" />
                                 </div>
-                                <div className="bg-white rounded-[2rem] p-4 md:p-8 border border-slate-100 shadow-sm">
-                                    <h2 className="font-black text-slate-800 text-lg mb-6 uppercase tracking-tight">Latest Entries</h2>
+
+                                <div className="bg-white rounded-[2rem] p-4 md:p-8 border shadow-sm">
+                                    <h2 className="font-black text-slate-800 text-lg mb-6 uppercase">Latest Entries</h2>
                                     <div className="table-container overflow-x-auto">
                                         <table className="w-full text-left min-w-max border-separate border-spacing-0">
-                                            <thead><tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest"><th className="pb-5 pr-6 border-b">Case / Date</th><th className="pb-5 pr-6 border-b">Bank Name</th><th className="pb-5 pr-6 border-b">Parties</th>{allUsedHeadings.map(h => <th key={h} className="pb-5 pr-6 border-b">{h}</th>)}<th className="pb-5 text-right border-b">Actions</th></tr></thead>
+                                            <thead>
+                                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                    <th className="pb-5 pr-6 border-b">Serial No</th>
+                                                    <th className="pb-5 pr-6 border-b">Reference</th>
+                                                    <th className="pb-5 pr-6 border-b">Institution</th>
+                                                    <th className="pb-5 pr-6 border-b">Buyer Name</th>
+                                                    <th className="pb-5 pr-6 border-b">Seller Name</th>
+                                                    <th className="pb-5 pr-6 border-b">Note (Proc.)</th>
+                                                    <th className="pb-5 pr-6 border-b">Status</th>
+                                                    <th className="pb-5 text-right border-b">Action</th>
+                                                </tr>
+                                            </thead>
                                             <tbody className="divide-y divide-slate-50">
-                                                {cases.slice(0, 10).map(c => (
+                                                {cases.slice(0, 15).map(c => (
                                                     <tr key={c.id} className="group hover:bg-blue-50/30 transition-all">
-                                                        <td className="py-5 pr-6 font-black text-slate-700">#{c.siNo}<div className="text-[9px] text-slate-400 font-bold uppercase">{c.timestamp}</div></td>
-                                                        <td className="py-5 pr-6 font-bold text-slate-800">{c.bankName}</td>
-                                                        <td className="py-5 pr-6"><div className="text-[11px] font-black text-slate-500 uppercase">B: {c.buyer}</div><div className="text-[11px] font-black text-slate-400 uppercase">S: {c.seller}</div></td>
-                                                        {allUsedHeadings.map(h => { const field = c.customFields.find(f => f.label === h); return <td key={h} className="py-5 pr-6 text-blue-600 text-[11px] font-black uppercase">{field ? field.value : "-"}</td> })}
-                                                        <td className="py-5 text-right"><div className="flex items-center justify-end gap-3"><div className="flex flex-col items-end"><button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button><span className="text-[8px] font-bold text-slate-400 mt-1">Updated: {c.statusTimestamp || c.timestamp}</span></div><div className="h-6 w-[1px] bg-slate-100 mx-1"></div><button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Icon name="eye" size={16}/></button><button onClick={() => { setFormData(c); setIsEditing(true); setShowModal(true); }} className="p-2 text-slate-400 hover:text-amber-500 transition-colors"><Icon name="edit-3" size={16}/></button><button onClick={() => softDelete(c.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16}/></button></div></td>
+                                                        <td className="py-5 pr-6 font-black text-slate-700">{c.serialNo || "-"}</td>
+                                                        <td className="py-5 pr-6 font-bold text-slate-500">{c.reference || "-"}</td>
+                                                        <td className="py-5 pr-6 font-bold text-slate-800">{c.institution || "-"}</td>
+                                                        <td className="py-5 pr-6 text-[11px] font-bold text-slate-600 uppercase">{c.buyerName || "-"}</td>
+                                                        <td className="py-5 pr-6 text-[11px] font-bold text-slate-600 uppercase">{c.sellerName || "-"}</td>
+                                                        <td className="py-5 pr-6 text-[11px] font-medium text-slate-400 italic max-w-[150px] truncate">{c.processor || c.remark || "-"}</td>
+                                                        <td className="py-5 pr-6">
+                                                            <button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button>
+                                                        </td>
+                                                        <td className="py-5 text-right">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Icon name="eye" size={16}/></button>
+                                                                <button onClick={() => exportSinglePDF(c)} className="p-2 text-slate-400 hover:text-slate-800 transition-colors"><Icon name="printer" size={16}/></button>
+                                                                <button onClick={() => softDelete(c.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16}/></button>
+                                                            </div>
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -528,106 +439,133 @@
 
                         {currentView === 'list' && (
                             <div className="space-y-6">
-                                <div className="space-y-4 bg-white p-6 rounded-[2rem] shadow-sm border">
-                                    <div className="relative"><Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Search SI No, Bank, Parties..." className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl outline-none font-medium focus:ring-2 focus:ring-blue-400" value={search} onChange={e => setSearch(e.target.value)} /></div>
-                                    <div className="flex flex-wrap gap-4 pt-2">
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-                                        <button onClick={() => {setSearch(''); setStartDate(''); setEndDate('');}} className="mt-5 px-6 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:bg-slate-200 transition-all">Reset Filters</button>
+                                <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
+                                    <div className="relative mb-4"><Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Search SI, Ref, Buyer, Seller..." className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl outline-none" value={search} onChange={e => setSearch(e.target.value)} /></div>
+                                    <div className="flex flex-wrap gap-4">
+                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
+                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+                                        <button onClick={() => {setSearch(''); setStartDate(''); setEndDate('');}} className="mt-5 px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase">Clear All</button>
                                     </div>
                                 </div>
                                 <div className="grid gap-4">
-                                    {filteredData.length > 0 ? filteredData.map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group transition-all hover:border-blue-200">
-                                            <div className="flex items-center gap-5 w-full"><div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center font-black text-white text-xs shrink-0 shadow-lg">#{c.siNo}</div><div className="overflow-hidden"><h3 className="font-bold text-slate-800 text-lg leading-none mb-1 truncate">{c.bankName}</h3><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">{c.timestamp} | B: {c.buyer} | S: {c.seller}</p></div></div>
-                                            <div className="flex items-center gap-2 w-full md:w-auto justify-end"><div className="flex flex-col items-end mr-2"><button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button><span className="text-[8px] font-bold text-slate-400 mt-1">Updated: {c.statusTimestamp || c.timestamp}</span></div><div className="h-8 w-[1px] bg-slate-100 mx-1"></div><button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"><Icon name="eye" size={18} /></button><button onClick={() => { setFormData(c); setIsEditing(true); setShowModal(true); }} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-600 rounded-xl transition-all shadow-sm"><Icon name="edit-3" size={18} /></button><button onClick={() => softDelete(c.id)} className="p-3 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-all shadow-sm"><Icon name="trash-2" size={18} /></button></div>
+                                    {filteredData.map(c => (
+                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between group">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs">#{c.serialNo}</div>
+                                                <div><h3 className="font-bold text-slate-800">{c.institution} ({c.reference})</h3><p className="text-[10px] text-slate-400 font-bold uppercase">{c.buyerName} vs {c.sellerName}</p></div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button>
+                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 rounded-xl"><Icon name="eye" size={18} /></button>
+                                            </div>
                                         </div>
-                                    )) : (<div className="py-20 text-center bg-white rounded-[2rem] border border-dashed flex flex-col items-center"><Icon name="search-x" size={48} className="text-slate-200 mb-4" /><p className="text-slate-400 font-black uppercase text-xs tracking-widest">No records match your filters</p></div>)}
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'details' && selectedCase && (
+                            <div className="max-w-4xl mx-auto pb-10">
+                                <button onClick={() => setCurrentView('dashboard')} className="mb-4 flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase"><Icon name="arrow-left" size={12} /> Dashboard</button>
+                                <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border">
+                                    <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
+                                        <div><h2 className="text-4xl font-black tracking-tighter">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase">{selectedCase.timestamp}</p></div>
+                                        <button onClick={() => exportSinglePDF(selectedCase)} className="bg-white/10 p-4 rounded-2xl hover:bg-white/20 transition-all"><Icon name="printer" /></button>
+                                    </div>
+                                    <div className="p-8 bg-[#F8FAFC]">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
+                                            {customHeadings.map(h => (
+                                                <DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />
+                                            ))}
+                                        </div>
+                                        {selectedCase.photo && <div className="mt-8"><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>}
+                                    </div>
                                 </div>
                             </div>
                         )}
 
                         {currentView === 'trash' && (
-                            <div className="space-y-6">
-                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border mb-6 flex justify-between items-center"><div className="flex items-center gap-3"><div className="bg-red-50 p-3 rounded-xl text-red-500"><Icon name="trash-2" size={24}/></div><div><h2 className="text-xl font-black text-slate-800">Recycle Bin</h2><p className="text-xs text-slate-500 font-bold uppercase">Items in trash: {trash.length}</p></div></div></div>
-                                <div className="grid gap-4">{trash.length > 0 ? trash.map(c => (<div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group opacity-75 hover:opacity-100 transition-all"><div className="flex items-center gap-5 w-full"><div className="w-14 h-14 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-inner">DEL</div><div className="overflow-hidden"><h3 className="font-bold text-slate-800 text-lg leading-none mb-1 truncate">{c.bankName} (#{c.siNo})</h3><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">Deleted Item</p></div></div><div className="flex items-center gap-2"><button onClick={() => restoreItem(c.id)} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-100 transition-all"><Icon name="rotate-ccw" size={14} /> Restore</button><button onClick={() => permanentDelete(c.id)} className="flex items-center gap-2 px-4 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all"><Icon name="x-circle" size={14} /> Delete Forever</button></div></div>)) : (<div className="py-20 text-center bg-white rounded-[2rem] border border-dashed flex flex-col items-center"><Icon name="check-circle" size={48} className="text-slate-200 mb-4" /><p className="text-slate-400 font-black uppercase text-xs tracking-widest">Trash is empty</p></div>)}</div>
-                            </div>
-                        )}
-
-                        {currentView === 'details' && selectedCase && (
-                            <div className="max-w-4xl mx-auto pb-10 animate-in zoom-in-95 duration-300">
-                                <div className="mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <button onClick={() => setCurrentView('list')} className="flex items-center gap-2 text-slate-500 font-bold text-[10px] uppercase hover:text-blue-600 self-start"><Icon name="arrow-left" size={12} /> Return to Vault</button>
-                                    <div className="flex gap-4 w-full md:w-auto">
-                                        <button onClick={() => exportSinglePDF(selectedCase)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-black transition-all"><Icon name="file-text" size={14}/> Download PDF</button>
-                                        <button onClick={() => { setFormData(selectedCase); setIsEditing(true); setShowModal(true); }} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-amber-100 hover:bg-amber-100 transition-all shadow-sm"><Icon name="edit-3" size={14}/> Modify</button>
-                                        <button onClick={() => softDelete(selectedCase.id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-red-100 hover:bg-red-100 transition-all shadow-sm"><Icon name="trash-2" size={14}/> Delete</button>
-                                    </div>
-                                </div>
-                                <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border">
-                                    <div className="bg-slate-900 p-8 text-white flex justify-between items-center"><div><h2 className="text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.siNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div><div className="flex flex-col items-end"><button onClick={() => toggleStatus(selectedCase.id)} className="status-btn"><StatusBadge status={selectedCase.status} /></button><span className="text-[10px] font-bold text-slate-400 mt-2">Status Changed: {selectedCase.statusTimestamp || selectedCase.timestamp}</span></div></div>
-                                    <div className="p-8 bg-[#F8FAFC]">
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"><DetailCard label="Bank" value={selectedCase.bankName} icon="landmark" /><DetailCard label="Buyer" value={selectedCase.buyer} icon="user" /><DetailCard label="Seller" value={selectedCase.seller} icon="shopping-bag" /><DetailCard label="Date" value={selectedCase.timestamp} icon="calendar" /></div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{selectedCase.customFields.map((f, i) => <DetailCard key={i} label={f.label} value={f.value} icon="plus-circle" color="text-blue-600" />)}</div>
-                                        {selectedCase.photo && (<div className="mt-8"><p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Attached Proof</p><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>)}
-                                    </div>
+                             <div className="space-y-6">
+                                <div className="bg-white p-6 rounded-[2rem] border mb-6 flex justify-between items-center"><div><h2 className="text-xl font-black">Recycle Bin</h2><p className="text-xs text-slate-400 font-bold">Items: {trash.length}</p></div></div>
+                                <div className="grid gap-4">
+                                    {trash.map(c => (
+                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border flex items-center justify-between opacity-75">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 bg-red-50 text-red-400 rounded-xl flex items-center justify-center font-black text-xs">DEL</div>
+                                                <div><h3 className="font-bold">{c.institution} (#{c.serialNo})</h3><p className="text-[10px] text-slate-400">Deleted {c.deletedAt}</p></div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => restoreItem(c.id)} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase"><Icon name="rotate-ccw" size={12} className="inline mr-1" /> Restore</button>
+                                                <button onClick={() => permanentDelete(c.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase">Delete Forever</button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* MODALS START HERE */}
+                    {/* MODALS */}
                     {showModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden my-auto">
-                                <div className="p-8 border-b flex justify-between items-center"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3><button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><Icon name="x" className="text-slate-400"/></button></div>
-                                <form onSubmit={handleSave} className="p-8 space-y-5">
-                                    <div className="grid grid-cols-2 gap-4"><Input label="Serial No" value={formData.siNo} onChange={v => setFormData({...formData, siNo: v})} required /><Select label="Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} /></div>
-                                    <Select label="Bank Name" value={formData.bankName} options={bankList} onChange={v => setFormData({...formData, bankName: v})} />
-                                    <div className="grid grid-cols-2 gap-4"><Input label="Buyer" value={formData.buyer} onChange={v => setFormData({...formData, buyer: v})} required /><Input label="Seller" value={formData.seller} onChange={v => setFormData({...formData, seller: v})} required /></div>
-                                    <div className="pt-4 border-t space-y-4">{formData.customFields.map((field, idx) => (<div key={idx} className="flex gap-2 items-end"><Input label={field.label} value={field.value} onChange={v => { const newFields = [...formData.customFields]; newFields[idx].value = v; setFormData({...formData, customFields: newFields}); }} /><button type="button" onClick={() => { if(confirm("Delete heading permanently?")) setCustomHeadings(customHeadings.filter(h => h !== field.label)); setFormData({...formData, customFields: formData.customFields.filter((_, i) => i !== idx)}); }} className="p-3 bg-red-50 text-red-500 rounded-xl mb-1 hover:bg-red-500 hover:text-white transition-all"><Icon name="trash-2" size={16}/></button></div>))} <button type="button" onClick={() => { const label = prompt("Heading Name (e.g. Phone):"); if(label) { setCustomHeadings([...customHeadings, label]); setFormData({...formData, customFields: [...formData.customFields, {label, value: ''}]}); } }} className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase hover:underline"><Icon name="plus-circle" size={14}/> Add Permanent Heading</button></div>
-                                    {!formData.photo ? (<button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 transition-all bg-slate-50/50"><Icon name="camera" /><span className="text-[10px] font-black uppercase tracking-widest">Attach Proof</span></button>) : (<div className="relative group h-32 overflow-hidden border-2 rounded-2xl shadow-inner"><img src={formData.photo} className="w-full h-full object-cover" /><button type="button" onClick={() => setFormData({...formData, photo: null})} className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 font-black text-xs uppercase transition-all">Delete Photo</button></div>)}
-                                    <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:bg-blue-700 transition-all">Save Record</button>
+                            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto no-scrollbar">
+                                <div className="p-8 border-b flex justify-between items-center sticky top-0 bg-white z-10"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3><button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full"><Icon name="x" className="text-slate-400"/></button></div>
+                                <form onSubmit={handleSave} className="p-8 space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
+                                        <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
+                                        <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
+                                        <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                                        <Input label="Buyer Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
+                                        <Input label="Seller Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                                        <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
+                                        <Input label="Processor (Note)" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
+                                        <Input label="Date Received" type="date" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} />
+                                        <Input label="Date Handover" type="date" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} />
+                                    </div>
+                                    {customHeadings.length > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                                            {customHeadings.map(h => (
+                                                <Input 
+                                                    key={h} 
+                                                    label={h} 
+                                                    value={formData.customData[h] || ''} 
+                                                    onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} 
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl">Save Case Record</button>
                                 </form>
                             </div>
                         </div>
                     )}
-                    
+
                     {showReportModal && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6">
-                                <div className="text-center"><div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="file-text" size={32}/></div><h3 className="font-black text-slate-800 text-xl uppercase tracking-tight">Generate Official Report</h3><p className="text-xs text-slate-400 mt-2 font-medium">Select specific criteria for export.</p></div>
+                                <div className="text-center"><div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="file-text" size={32}/></div><h3 className="font-black text-slate-800 text-xl uppercase tracking-tight">Generate Official Report</h3></div>
                                 <div className="space-y-4">
-                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-wider">Select Bank</label><select value={reportFilters.bank} onChange={e => setReportFilters({...reportFilters, bank: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 shadow-inner"><option value="">-- All Banks --</option>{bankList.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
-                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-wider">Select Status(es) <span className="text-blue-500">(Click to Select Multiple)</span></label><div className="grid grid-cols-2 gap-2 p-1">{statusList.map(s => { const isSelected = reportFilters.status.includes(s); return (<button key={s} onClick={() => toggleReportStatus(s)} className={`p-3 rounded-xl text-xs font-black uppercase transition-all border shadow-sm ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}`}>{s}{isSelected && <Icon name="check" size={12} className="inline ml-1 mb-0.5" />}</button>) })}</div><p className="text-[10px] text-center text-slate-400 font-bold mt-1">{reportFilters.status.length === 0 ? "All statuses will be included" : `${reportFilters.status.length} status(es) selected`}</p></div>
+                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Select Institution</label><select value={reportFilters.bank} onChange={e => setReportFilters({...reportFilters, bank: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold"><option value="">-- All --</option>{bankList.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Select Status(es)</label><div className="grid grid-cols-2 gap-2">{statusList.map(s => (<button key={s} onClick={() => toggleReportStatus(s)} className={`p-3 rounded-xl text-[10px] font-black uppercase border ${reportFilters.status.includes(s) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}>{s}</button>))}</div></div>
                                 </div>
-                                <div className="pt-4 flex gap-3"><button onClick={() => setShowReportModal(false)} className="px-6 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase hover:bg-slate-200 transition-all">Cancel</button><div className="flex flex-1 gap-2"><button onClick={generateTargetedExcel} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase shadow-lg hover:bg-emerald-700 transition-all text-xs flex items-center justify-center gap-1"><Icon name="file-spreadsheet" size={14}/> Excel</button><button onClick={generateTargetedPDF} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase shadow-lg hover:bg-indigo-700 transition-all text-xs flex items-center justify-center gap-1"><Icon name="printer" size={14}/> PDF</button></div></div>
+                                <div className="pt-4 flex gap-3"><button onClick={() => setShowReportModal(false)} className="px-6 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase">Cancel</button><div className="flex flex-1 gap-2"><button onClick={() => generateSpecificReport('excel')} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs">Excel</button><button onClick={() => generateSpecificReport('pdf')} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs">PDF</button></div></div>
                             </div>
                         </div>
                     )}
-                    {showImportModal && (
-                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-                            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6">
-                                <div className="text-center"><div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="upload-cloud" size={32}/></div><h3 className="font-black text-slate-800 text-xl uppercase tracking-tight">Bulk Data Import</h3><p className="text-xs text-slate-400 mt-2 font-medium">Add multiple records at once using Excel.</p></div>
-                                <div className="space-y-4">
-                                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-center space-y-4"><p className="text-xs font-bold text-slate-500">Step 1: Get the format</p><button onClick={downloadTemplate} className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase shadow-sm flex items-center justify-center gap-2 hover:border-blue-300 hover:text-blue-600 transition-all"><Icon name="download" size={16}/> Download Excel Template</button></div>
-                                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-center space-y-4 relative"><p className="text-xs font-bold text-slate-500">Step 2: Upload filled file</p><input type="file" accept=".xlsx, .xls" onChange={handleBulkImport} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><div className="w-full py-8 border-2 border-dashed border-slate-300 rounded-xl text-slate-400 flex flex-col items-center justify-center gap-2 bg-white"><Icon name="file-spreadsheet" size={24} /><span className="text-[10px] font-black uppercase tracking-widest">Click to Upload Excel</span></div></div>
-                                </div>
-                                <div className="pt-2"><button onClick={() => setShowImportModal(false)} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase shadow-lg hover:bg-slate-900 transition-all">Close</button></div>
-                            </div>
-                        </div>
-                    )}
-                    {isCameraActive && (
-                        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6 no-print">
-                            <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-[2.5rem] shadow-2xl border-4 border-white/10" /><canvas ref={canvasRef} className="hidden" />
-                            <div className="mt-8 flex gap-6"><button onClick={() => { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); setIsCameraActive(false); }} className="w-16 h-16 rounded-full bg-white/10 text-white flex items-center justify-center border border-white/20 hover:bg-red-500 transition-all"><Icon name="x"/></button><button onClick={snap} className="w-20 h-20 rounded-full bg-white border-8 border-white/20 active:scale-90 transition-all shadow-xl"></button></div>
-                        </div>
-                    )}
+
                     {showSettings && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-                            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden p-10 space-y-12 h-[80vh] overflow-y-auto no-scrollbar">
-                                <CategoryManager title="Bank Names" list={bankList} onUpdate={(val) => updateSettings('banks', val)} /><CategoryManager title="Status Lifecycle" list={statusList} onUpdate={(val) => updateSettings('statuses', val)} /><CategoryManager title="Custom Headings" list={customHeadings} onUpdate={(val) => updateSettings('headings', val)} />
-                                <button onClick={() => setShowSettings(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase hover:bg-black transition-all">Dismiss Settings</button>
+                            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl p-10 space-y-12 h-[80vh] overflow-y-auto no-scrollbar">
+                                <CategoryManager title="Institutions" list={bankList} onUpdate={(val) => updateSettings('banks', val)} />
+                                <CategoryManager title="Status List" list={statusList} onUpdate={(val) => updateSettings('statuses', val)} />
+                                <CategoryManager title="Custom Headings" list={customHeadings} onUpdate={(val) => updateSettings('headings', val)} />
+                                <button onClick={() => setShowSettings(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Dismiss Settings</button>
                             </div>
                         </div>
                     )}
@@ -635,12 +573,19 @@
             );
         };
 
-        const DetailCard = ({ label, value, icon, color }) => (<div className="bg-white p-4 rounded-2xl border shadow-sm flex items-start gap-3 mb-2"><div className="p-2.5 bg-slate-50 text-slate-400 rounded-xl"><Icon name={icon} size={16} /></div><div className="overflow-hidden"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{label}</span><p className={`font-black text-[13px] leading-tight truncate ${color || 'text-slate-800'}`}>{value || 'N/A'}</p></div></div>);
+        const StatsCard = ({ label, value, color }) => {
+            const colors = { slate: 'border-slate-100 text-slate-800', amber: 'border-amber-100 text-amber-600', emerald: 'border-emerald-100 text-emerald-600', blue: 'border-blue-100 text-blue-600' };
+            return (<div className={`bg-white p-6 rounded-3xl shadow-sm border text-center ${colors[color]}`}><p className="text-[10px] font-black text-slate-400 uppercase">{label}</p><h4 className="text-3xl font-black">{value}</h4></div>);
+        };
+        const DetailCard = ({ label, value, icon }) => (<div className="bg-white p-4 rounded-2xl border shadow-sm flex items-start gap-3"><div className="p-2.5 bg-slate-50 text-slate-400 rounded-xl"><Icon name={icon} size={16} /></div><div className="overflow-hidden"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">{label}</span><p className="font-black text-[11px] text-slate-800 truncate">{value || 'N/A'}</p></div></div>);
         const SidebarLink = ({ active, onClick, icon, label }) => (<button onClick={onClick} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-sm transition-all ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name={icon} size={18} /> {label}</button>);
-        const StatusBadge = ({ status }) => { const colors = { 'Pending': 'bg-amber-50 text-amber-600 border-amber-100', 'Processed': 'bg-emerald-50 text-emerald-600 border-emerald-100', 'Under Process': 'bg-blue-50 text-blue-600 border-blue-100' }; return (<span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border shadow-sm transition-all flex items-center gap-2 hover:shadow-md cursor-pointer ${colors[status] || 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${status === 'Processed' ? 'bg-emerald-500' : status === 'Pending' ? 'bg-amber-500' : 'bg-blue-500 animate-pulse'}`}></div>{status}</span>); };
-        const Input = ({ label, ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-wider">{label}</label><input {...props} onChange={e => props.onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 shadow-inner focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all" /></div>);
-        const Select = ({ label, options, value, onChange }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-wider">{label}</label><div className="relative"><select value={value} onChange={e => onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 shadow-inner appearance-none">{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select><Icon name="chevron-down" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" /></div></div>);
-        const CategoryManager = ({ title, list, onUpdate }) => { const [val, setVal] = useState(''); return (<div className="space-y-4"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{title}</h4><div className="flex gap-3"><input type="text" className="flex-1 bg-slate-100 p-4 rounded-2xl border-none outline-none font-bold text-sm shadow-inner" placeholder={`Add to ${title}...`} value={val} onChange={e => setVal(e.target.value)} /><button onClick={() => {if(val){onUpdate([...list, val]); setVal('')}}} className="bg-blue-600 text-white px-6 rounded-2xl font-black shadow-lg hover:bg-blue-700 transition-all"><Icon name="plus" /></button></div><div className="flex flex-wrap gap-2">{list.map((item, i) => (<div key={i} className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm group"><span className="text-sm font-black text-slate-700">{item}</span><button onClick={() => onUpdate(list.filter((_, idx) => idx !== i))} className="text-slate-300 group-hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></div>))}</div></div>); };
+        const StatusBadge = ({ status }) => { 
+            const colors = { 'Pending': 'bg-amber-50 text-amber-600 border-amber-100', 'Delivered': 'bg-emerald-50 text-emerald-600 border-emerald-100', 'Under Process': 'bg-blue-50 text-blue-600 border-blue-100' }; 
+            return (<span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border flex items-center gap-2 ${colors[status] || 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${status === 'Delivered' ? 'bg-emerald-500' : status === 'Pending' ? 'bg-amber-500' : 'bg-blue-500 animate-pulse'}`}></div>{status}</span>); 
+        };
+        const Input = ({ label, type = "text", ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">{label}</label><input type={type} {...props} onChange={e => props.onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-blue-100" /></div>);
+        const Select = ({ label, options, value, onChange }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">{label}</label><div className="relative"><select value={value} onChange={e => onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 appearance-none shadow-inner">{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select><Icon name="chevron-down" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" /></div></div>);
+        const CategoryManager = ({ title, list, onUpdate }) => { const [val, setVal] = useState(''); return (<div className="space-y-4"><h4 className="text-[10px] font-black text-slate-400 uppercase">{title}</h4><div className="flex gap-3"><input type="text" className="flex-1 bg-slate-100 p-4 rounded-2xl border-none font-bold text-sm" placeholder={`Add...`} value={val} onChange={e => setVal(e.target.value)} /><button onClick={() => {if(val){onUpdate([...list, val]); setVal('')}}} className="bg-blue-600 text-white px-6 rounded-2xl font-black shadow-lg"><Icon name="plus" /></button></div><div className="flex flex-wrap gap-2">{list.map((item, i) => (<div key={i} className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border group shadow-sm"><span className="text-sm font-black">{item}</span><button onClick={() => onUpdate(list.filter((_, idx) => idx !== i))} className="text-slate-300 group-hover:text-red-500"><Icon name="trash-2" size={14}/></button></div>))}</div></div>); };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
