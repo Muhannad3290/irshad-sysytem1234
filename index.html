@@ -561,34 +561,67 @@
                             </div>
                         )}
 
-                        {currentView === 'list' && (
-                            <div className="space-y-6">
-                                <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                                    <div className="relative mb-4"><Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Search Vault..." className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl outline-none shadow-inner" value={search} onChange={e => {setSearch(e.target.value); setVisibleCount(20);}} /></div>
-                                    <div className="flex flex-wrap gap-4">
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={startDate} onChange={e => {setStartDate(e.target.value); setVisibleCount(20);}} /></div>
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={endDate} onChange={e => {setEndDate(e.target.value); setVisibleCount(20);}} /></div>
-                                    </div>
-                                </div>
-                                
-                                <div className="grid gap-4">
-                                    {filteredData.slice(0, visibleCount).map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
-                                            <div className="flex items-center gap-5 w-full">
-                                                <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0">#{c.serialNo}</div>
-                                                <div className="overflow-hidden">
-                                                    <h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                                                <button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button>
-                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
-                                                <button onClick={() => openModify(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-500 rounded-xl transition-all"><Icon name="edit-3" size={18} /></button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                       {currentView === 'list' && (
+    <div className="space-y-6">
+        {/* Search & Date Filters - Optimized for small screens */}
+        <div className="bg-white p-5 rounded-[2rem] border shadow-sm">
+            <div className="relative mb-4">
+                <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input type="text" placeholder="Search Vault..." className="w-full p-4 pl-11 bg-slate-50 border-none rounded-2xl outline-none shadow-inner text-sm" value={search} onChange={e => {setSearch(e.target.value); setVisibleCount(20);}} />
+            </div>
+            <div className="flex gap-3">
+                <div className="flex-1"><label className="text-[8px] font-black text-slate-400 uppercase ml-1">From</label><input type="date" className="w-full p-2.5 bg-slate-50 rounded-xl border-none text-[10px] font-bold shadow-inner" value={startDate} onChange={e => {setStartDate(e.target.value); setVisibleCount(20);}} /></div>
+                <div className="flex-1"><label className="text-[8px] font-black text-slate-400 uppercase ml-1">To</label><input type="date" className="w-full p-2.5 bg-slate-50 rounded-xl border-none text-[10px] font-bold shadow-inner" value={endDate} onChange={e => {setEndDate(e.target.value); setVisibleCount(20);}} /></div>
+            </div>
+        </div>
+        
+        {/* Record Cards - Flexbox fix for mobile visibility */}
+        <div className="grid gap-3">
+            {filteredData.slice(0, visibleCount).map(c => (
+                <div key={c.id} className="bg-white p-4 rounded-[2rem] border shadow-sm flex items-center justify-between gap-3 group hover:border-blue-200 transition-all">
+                    
+                    {/* 1. Icon & Main Info (The "min-w-0" here is the secret fix) */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-[10px] shrink-0">
+                            #{c.serialNo}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="font-bold text-slate-800 text-sm truncate leading-tight">
+                                {c.institution} 
+                                <span className="ml-1 text-[9px] text-blue-500 font-black">({c.reference})</span>
+                            </h3>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase truncate mt-0.5">
+                                {c.buyerName} vs {c.sellerName}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* 2. Actions (Shrink-0 ensures these never get pushed off screen) */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Status badge hidden on very small screens to save space, or kept small */}
+                        <div className="hidden sm:block">
+                            <button onClick={() => toggleStatus(c.id)}><StatusBadge status={c.status} /></button>
+                        </div>
+                        
+                        <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl border border-slate-100 active:bg-blue-50 active:text-blue-600">
+                            <Icon name="eye" size={16} />
+                        </button>
+                        <button onClick={() => openModify(c)} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl border border-slate-100 active:bg-amber-50 active:text-amber-500">
+                            <Icon name="edit-3" size={16} />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        {/* Load More Button */}
+        {filteredData.length > visibleCount && (
+            <button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-[10px] tracking-widest shadow-sm">
+                Show More ({filteredData.length - visibleCount})
+            </button>
+        )}
+    </div>
+)}
 
                                 {filteredData.length > visibleCount && (
                                     <button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-xs hover:bg-slate-50 transition-all tracking-widest shadow-sm">Load More Records ({filteredData.length - visibleCount} Remaining)</button>
