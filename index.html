@@ -251,6 +251,37 @@
                 if(confirm("Permanent delete? Cannot be undone.")) await deleteDoc(doc(db, "trash", id));
             };
 
+            const resetSystem = async () => {
+                if(confirm("CRITICAL: Delete ALL cloud records from the system?")) {
+                    if(confirm("FINAL WARNING: This action is permanent and cannot be undone. Do you wish to proceed?")) {
+                        try {
+                            const snapshot = await getDocs(collection(db, "cases"));
+                            const total = snapshot.docs.length;
+                            if (total === 0) return alert("System is already empty.");
+
+                            setImportProgress(0);
+                            const chunkSize = 400;
+                            const docs = snapshot.docs;
+
+                            for (let i = 0; i < total; i += chunkSize) {
+                                const batch = writeBatch(db);
+                                const chunk = docs.slice(i, i + chunkSize);
+                                chunk.forEach(d => batch.delete(d.ref));
+                                await batch.commit();
+                                setImportProgress(Math.min(100, Math.round(((i + chunk.length) / total) * 100)));
+                            }
+
+                            alert("System Reset Complete. All cloud records have been wiped.");
+                            setImportProgress(null);
+                        } catch (err) {
+                            console.error(err);
+                            alert("Reset failed. Please check your connection.");
+                            setImportProgress(null);
+                        }
+                    }
+                }
+            };
+
             const updateSettings = async (type, newList) => {
                 const settingDoc = doc(db, "settings", "global");
                 await setDoc(settingDoc, { [type]: newList }, { merge: true });
@@ -408,7 +439,7 @@
                     {/* Sidebar */}
                     <aside className={`no-print w-72 bg-white border-r flex-col p-6 h-screen z-50 transition-transform duration-300 md:translate-x-0 fixed md:sticky top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:flex'}`}>
                         <div className="flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800"><div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>IRSHAD <span className="text-blue-600">SYSTEM</span></div>
-                        <div className="space-y-1">
+                        <div className="space-y-1 overflow-y-auto no-scrollbar max-h-[50vh]">
                             <SidebarLink active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setVisibleCount(20); setIsMobileMenuOpen(false);}} icon="layout" label="Dashboard" />
                             <SidebarLink active={currentView === 'list'} onClick={() => {setCurrentView('list'); setVisibleCount(20); setIsMobileMenuOpen(false);}} icon="database" label="Records Vault" />
                             <SidebarLink active={currentView === 'trash'} onClick={() => {setCurrentView('trash'); setIsMobileMenuOpen(false);}} icon="trash-2" label="Recycle Bin" />
@@ -424,7 +455,13 @@
                             </div>
 
                             <button onClick={openNewEntry} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl mt-2 flex items-center justify-center gap-2 hover:bg-blue-700 transition-all tracking-wider"><Icon name="plus" /> New Entry</button>
-                            <button onClick={() => { if(confirm("CRITICAL: Logout?")) signOut(auth); }} className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-xs font-black mt-2 flex items-center justify-center gap-2 hover:bg-red-50 hover:text-red-600 transition-all tracking-wider"><Icon name="log-out" size={16}/> Logout</button>
+                            
+                            <div className="flex flex-col gap-1 pt-2">
+                                <button onClick={resetSystem} className="w-full py-2 bg-red-50 text-red-500 rounded-xl text-[9px] font-black uppercase border border-red-100 hover:bg-red-500 hover:text-white transition-all tracking-widest flex items-center justify-center gap-2">
+                                    <Icon name="refresh-ccw" size={12}/> Reset System
+                                </button>
+                                <button onClick={() => { if(confirm("CRITICAL: Logout?")) signOut(auth); }} className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-red-50 hover:text-red-600 transition-all tracking-wider"><Icon name="log-out" size={16}/> Logout</button>
+                            </div>
                         </div>
                     </aside>
 
@@ -653,16 +690,16 @@
                         </div>
                     )}
 
-                    {/* Progress Loader for Bulk Import */}
+                    {/* Progress Loader for Bulk Import / Reset */}
                     {importProgress !== null && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-lg">
-                            <div className="bg-white w-full max-sm rounded-[2rem] p-8 text-center space-y-6">
-                                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="cloud-upload" className="text-blue-600 animate-bounce" size={40}/></div>
-                                <h3 className="font-black text-xl uppercase">Syncing Cloud Vault</h3>
+                            <div className="bg-white w-full max-sm rounded-[2rem] p-8 text-center space-y-6 animate-in zoom-in duration-300">
+                                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="cloud-upload" className="text-blue-600 animate-pulse" size={40}/></div>
+                                <h3 className="font-black text-xl uppercase tracking-tighter">Synchronizing Cloud Data</h3>
                                 <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
                                     <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${importProgress}%` }}></div>
                                 </div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Processing {importProgress}% ... Please stay on this screen</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Processing {importProgress}% ... Please wait</p>
                             </div>
                         </div>
                     )}
