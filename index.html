@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Optimized Enterprise Registry v5.9</title>
+    <title>IRSHAD SYSTEM | Registry v6.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -24,20 +24,15 @@
         .status-btn:active { transform: scale(0.95); }
         input, select, button { touch-action: manipulation; }
         .login-wrapper { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
-        .loading-shimmer {
-            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
     </style>
 </head>
-<body class="bg-[#F1F5F9] text-[#1E293B]">
+<body class="bg-[#F8FAFC] text-[#1E293B]">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -56,6 +51,7 @@
 
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
+        // DEFINING SYSTEM FIELDS FOR MAPPING
         const SYSTEM_FIELDS = [
             { key: 'serialNo', label: 'Serial No' },
             { key: 'reference', label: 'Reference' },
@@ -158,7 +154,6 @@
             const [startDate, setStartDate] = useState('');
             const [endDate, setEndDate] = useState('');
             
-            // Pagination state for the "list" view to prevent DOM lag
             const [visibleCount, setVisibleCount] = useState(20);
 
             const emptyForm = {
@@ -287,7 +282,9 @@
                 await setDoc(settingDoc, { [type]: newList }, { merge: true });
             };
 
-            // OPTIMIZED BULK IMPORT (Using Firestore Batching)
+            // ------------------------------------------------------------------
+            // OPTIMIZED AUTO-SYNC BULK IMPORT
+            // ------------------------------------------------------------------
             const handleBulkImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -303,8 +300,58 @@
                         
                         setImportProgress(0);
 
-                        // Firestore Batched Write (Limit 500 per batch)
-                        const chunkSize = 400; // Safer margin
+                        // 1. HARVEST NEW METADATA (Banks, Statuses, Headings)
+                        // Fetch current settings from DB to ensure we have the latest base, irrespective of local state
+                        const settingsSnap = await getDoc(doc(db, "settings", "global"));
+                        const currentSettings = settingsSnap.exists() ? settingsSnap.data() : {};
+
+                        const currentBanks = new Set(currentSettings.banks || bankList);
+                        const currentStatuses = new Set(currentSettings.statuses || statusList);
+                        const currentHeadings = new Set(currentSettings.headings || customHeadings);
+
+                        dataRows.forEach(row => {
+                            const inst = row['Institution'] || row['institution'];
+                            if (inst && typeof inst === 'string' && inst.trim() !== '') currentBanks.add(inst.trim());
+
+                            const st = row['Current Status'] || row['status'];
+                            if (st && typeof st === 'string' && st.trim() !== '') currentStatuses.add(st.trim());
+
+                            // Check Extra Columns for Headings
+                            Object.keys(row).forEach(key => {
+                                const cleanKey = key.trim();
+                                if (!cleanKey || cleanKey.startsWith('__EMPTY')) return; // Skip invalid excel keys
+
+                                // Robust System Field Check (Case Insensitive)
+                                const isSystem = SYSTEM_FIELDS.some(sf => 
+                                    sf.key.toLowerCase() === cleanKey.toLowerCase() || 
+                                    sf.label.toLowerCase() === cleanKey.toLowerCase()
+                                );
+                                const isStatusField = ['status', 'current status'].includes(cleanKey.toLowerCase());
+                                
+                                if (!isSystem && !isStatusField) {
+                                    currentHeadings.add(cleanKey);
+                                }
+                            });
+                        });
+
+                        // 2. UPDATE GLOBAL SETTINGS FIRST (To ensure UI reflects Categories)
+                        const updatedBanks = Array.from(currentBanks);
+                        const updatedStatuses = Array.from(currentStatuses);
+                        const updatedHeadings = Array.from(currentHeadings);
+                        
+                        await setDoc(doc(db, "settings", "global"), {
+                            banks: updatedBanks,
+                            statuses: updatedStatuses,
+                            headings: updatedHeadings
+                        }, { merge: true });
+                        
+                        // Optimistic update
+                        setBankList(updatedBanks);
+                        setStatusList(updatedStatuses);
+                        setCustomHeadings(updatedHeadings);
+
+                        // 3. BATCH WRITE DATA
+                        const chunkSize = 400; 
                         for (let i = 0; i < total; i += chunkSize) {
                             const chunk = dataRows.slice(i, i + chunkSize);
                             const batch = writeBatch(db);
@@ -312,11 +359,33 @@
                             chunk.forEach(row => {
                                 const newCaseRef = doc(collection(db, "cases"));
                                 const entry = { ...emptyForm, timestamp, statusTimestamp: timestamp };
+                                
+                                // Map System Fields
                                 SYSTEM_FIELDS.forEach(field => {
-                                    const val = row[field.label] || row[field.key] || "";
-                                    entry[field.key] = String(val);
+                                    // Try matching label or key case-insensitively
+                                    const matchingKey = Object.keys(row).find(k => k.trim().toLowerCase() === field.label.toLowerCase() || k.trim().toLowerCase() === field.key.toLowerCase());
+                                    const val = matchingKey ? row[matchingKey] : "";
+                                    entry[field.key] = String(val || "");
                                 });
-                                if (row['Current Status']) entry.status = row['Current Status'];
+
+                                // Map Custom Data
+                                entry.customData = {};
+                                Object.keys(row).forEach(key => {
+                                    const cleanKey = key.trim();
+                                    if (!cleanKey || cleanKey.startsWith('__EMPTY')) return;
+
+                                    const isSystem = SYSTEM_FIELDS.some(sf => sf.key.toLowerCase() === cleanKey.toLowerCase() || sf.label.toLowerCase() === cleanKey.toLowerCase());
+                                    const isStatusField = ['status', 'current status'].includes(cleanKey.toLowerCase());
+                                    
+                                    if (!isSystem && !isStatusField) {
+                                        entry.customData[cleanKey] = String(row[key]);
+                                    }
+                                });
+
+                                // Explicit status override if found
+                                const statusKey = Object.keys(row).find(k => ['current status', 'status'].includes(k.trim().toLowerCase()));
+                                if (statusKey && row[statusKey]) entry.status = row[statusKey];
+
                                 batch.set(newCaseRef, entry);
                             });
                             
@@ -324,7 +393,7 @@
                             setImportProgress(Math.min(100, Math.round(((i + chunk.length) / total) * 100)));
                         }
 
-                        alert(`Successfully imported ${total} records.`);
+                        alert(`Successfully imported ${total} records.\n\nExtra Field Headings Updated: ${updatedHeadings.length} columns found.`);
                         setImportProgress(null);
                         setShowImportModal(false);
                     } catch (err) { 
@@ -613,7 +682,7 @@
                                     <div className="p-8 bg-[#F8FAFC]">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
-                                            {customHeadings.map(h => (
+                                            {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (
                                                 <DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />
                                             ))}
                                         </div>
@@ -650,23 +719,64 @@
                             <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto no-scrollbar">
                                 <div className="p-8 border-b flex justify-between items-center sticky top-0 bg-white z-10 shadow-sm"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3><button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full transition-all"><Icon name="x" className="text-slate-400"/></button></div>
                                 <form onSubmit={handleSave} className="p-8 space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
-                                        <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
-                                        <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
-                                        <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
+                                    
+                                    {/* CORE INFO */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Case Information</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
+                                            <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
+                                            <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
+                                            <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
+                                            <Input label="Remark" value={formData.remark} onChange={v => setFormData({...formData, remark: v})} />
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-                                        <Input label="Buyer Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
-                                        <Input label="Seller Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
+
+                                    {/* BUYER INFO */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Buyer Details</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input label="Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
+                                            <Input label="ID Number" value={formData.buyerId} onChange={v => setFormData({...formData, buyerId: v})} />
+                                            <Input label="Email" type="email" value={formData.buyerEmail} onChange={v => setFormData({...formData, buyerEmail: v})} />
+                                            <Input label="Phone" type="tel" value={formData.buyerPhone} onChange={v => setFormData({...formData, buyerPhone: v})} />
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-                                        <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
-                                        <Input label="Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
+
+                                    {/* SELLER INFO */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Seller Details</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input label="Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
+                                            <Input label="ID Number" value={formData.sellerId} onChange={v => setFormData({...formData, sellerId: v})} />
+                                            <Input label="Email" type="email" value={formData.sellerEmail} onChange={v => setFormData({...formData, sellerEmail: v})} />
+                                            <Input label="Phone" type="tel" value={formData.sellerPhone} onChange={v => setFormData({...formData, sellerPhone: v})} />
+                                        </div>
                                     </div>
-                                    {customHeadings.map(h => (
-                                        <div key={h} className="border-t pt-4"><Input label={h} value={formData.customData?.[h] || ''} onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} /></div>
-                                    ))}
+
+                                    {/* STATUS & DATES */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Processing Details</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
+                                            <Input label="Processor Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
+                                            <Input label="Date Received" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
+                                            <Input label="Date Handover" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
+                                        </div>
+                                    </div>
+
+                                    {/* DYNAMIC FIELDS FROM EXCEL */}
+                                    {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).length > 0 && (
+                                        <div className="space-y-4">
+                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Extra Fields (Imported)</h4>
+                                            <div className="grid grid-cols-1 gap-4">
+                                                {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).map(h => (
+                                                    <Input key={h} label={h} value={formData.customData?.[h] || ''} onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="border-t pt-4">
                                         {!isCameraActive ? (
                                             <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all">
@@ -720,7 +830,7 @@
                         </div>
                     )}
 
-                    {/* Report and Settings modals remain same but optimized for style consistency */}
+                    {/* Report and Settings modals */}
                     {showReportModal && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6">
