@@ -35,14 +35,15 @@
         import { getFirestore, collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+        // UPDATED FIREBASE CONFIGURATION
         const firebaseConfig = {
-            apiKey: "AIzaSyAJmStws5WeTY0wJDlkikfB2Wxy9NJn-IQ",
-            authDomain: "irshad-system11.firebaseapp.com",
-            projectId: "irshad-system11",
-            storageBucket: "irshad-system11.firebasestorage.app",
-            messagingSenderId: "228065254339",
-            appId: "1:228065254339:web:50a1a7913905a26e08fb76",
-            measurementId: "G-E9Z1JQ5TH5"
+            apiKey: "AIzaSyCIK0MKWHkgHfqoF-KPcA52y7dz7zZv9UY",
+            authDomain: "irshad-system123.firebaseapp.com",
+            projectId: "irshad-system123",
+            storageBucket: "irshad-system123.firebasestorage.app",
+            messagingSenderId: "945046837678",
+            appId: "1:945046837678:web:8f73139c4572cd8c8f503f",
+            measurementId: "G-RSX36GGG6N"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -153,7 +154,6 @@
             const [search, setSearch] = useState('');
             const [startDate, setStartDate] = useState('');
             const [endDate, setEndDate] = useState('');
-            
             const [visibleCount, setVisibleCount] = useState(20);
 
             const emptyForm = {
@@ -198,7 +198,6 @@
                 return () => { unsubscribeCases(); unsubscribeTrash(); unsubSettings(); };
             }, [user]);
 
-            // Database Actions
             const toggleStatus = async (caseId) => {
                 const caseItem = cases.find(c => c.id === caseId);
                 if (!caseItem) return;
@@ -282,9 +281,6 @@
                 await setDoc(settingDoc, { [type]: newList }, { merge: true });
             };
 
-            // ------------------------------------------------------------------
-            // OPTIMIZED AUTO-SYNC BULK IMPORT
-            // ------------------------------------------------------------------
             const handleBulkImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -299,8 +295,6 @@
                         const timestamp = new Date().toLocaleString('en-GB');
                         
                         setImportProgress(0);
-
-                        // 1. HARVEST NEW METADATA (Banks, Statuses, Headings)
                         const settingsSnap = await getDoc(doc(db, "settings", "global"));
                         const currentSettings = settingsSnap.exists() ? settingsSnap.data() : {};
 
@@ -311,27 +305,22 @@
                         dataRows.forEach(row => {
                             const inst = row['Institution'] || row['institution'];
                             if (inst && typeof inst === 'string' && inst.trim() !== '') currentBanks.add(inst.trim());
-
                             const st = row['Current Status'] || row['status'];
                             if (st && typeof st === 'string' && st.trim() !== '') currentStatuses.add(st.trim());
 
                             Object.keys(row).forEach(key => {
                                 const cleanKey = key.trim();
                                 if (!cleanKey || cleanKey.startsWith('__EMPTY')) return;
-
                                 const isSystem = SYSTEM_FIELDS.some(sf => 
                                     sf.key.toLowerCase() === cleanKey.toLowerCase() || 
                                     sf.label.toLowerCase() === cleanKey.toLowerCase()
                                 );
-                                const isStatusField = ['status', 'current status'].includes(cleanKey.toLowerCase());
-                                
-                                if (!isSystem && !isStatusField) {
+                                if (!isSystem && !['status', 'current status'].includes(cleanKey.toLowerCase())) {
                                     currentHeadings.add(cleanKey);
                                 }
                             });
                         });
 
-                        // 2. UPDATE GLOBAL SETTINGS FIRST
                         const updatedBanks = Array.from(currentBanks);
                         const updatedStatuses = Array.from(currentStatuses);
                         const updatedHeadings = Array.from(currentHeadings);
@@ -346,57 +335,46 @@
                         setStatusList(updatedStatuses);
                         setCustomHeadings(updatedHeadings);
 
-                        // 3. BATCH WRITE DATA
                         const chunkSize = 400; 
                         for (let i = 0; i < total; i += chunkSize) {
                             const chunk = dataRows.slice(i, i + chunkSize);
                             const batch = writeBatch(db);
-                            
                             chunk.forEach(row => {
                                 const newCaseRef = doc(collection(db, "cases"));
                                 const entry = { ...emptyForm, timestamp, statusTimestamp: timestamp };
-                                
                                 SYSTEM_FIELDS.forEach(field => {
                                     const matchingKey = Object.keys(row).find(k => k.trim().toLowerCase() === field.label.toLowerCase() || k.trim().toLowerCase() === field.key.toLowerCase());
                                     const val = matchingKey ? row[matchingKey] : "";
                                     entry[field.key] = String(val || "");
                                 });
-
                                 entry.customData = {};
                                 Object.keys(row).forEach(key => {
                                     const cleanKey = key.trim();
                                     if (!cleanKey || cleanKey.startsWith('__EMPTY')) return;
                                     const isSystem = SYSTEM_FIELDS.some(sf => sf.key.toLowerCase() === cleanKey.toLowerCase() || sf.label.toLowerCase() === cleanKey.toLowerCase());
-                                    const isStatusField = ['status', 'current status'].includes(cleanKey.toLowerCase());
-                                    
-                                    if (!isSystem && !isStatusField) {
+                                    if (!isSystem && !['status', 'current status'].includes(cleanKey.toLowerCase())) {
                                         entry.customData[cleanKey] = String(row[key]);
                                     }
                                 });
-
                                 const statusKey = Object.keys(row).find(k => ['current status', 'status'].includes(k.trim().toLowerCase()));
                                 if (statusKey && row[statusKey]) entry.status = row[statusKey];
-
                                 batch.set(newCaseRef, entry);
                             });
-                            
                             await batch.commit();
                             setImportProgress(Math.min(100, Math.round(((i + chunk.length) / total) * 100)));
                         }
-
-                        alert(`Successfully imported ${total} records.\n\nExtra Field Headings Updated: ${updatedHeadings.length} columns found.`);
+                        alert(`Successfully imported ${total} records.`);
                         setImportProgress(null);
                         setShowImportModal(false);
                     } catch (err) { 
                         console.error(err);
-                        alert("Import Failed. Check console for details."); 
+                        alert("Import Failed."); 
                         setImportProgress(null);
                     }
                 };
                 reader.readAsBinaryString(file);
             };
 
-            // Export logic
             const exportVaultPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('l', 'mm', 'a4');
@@ -410,30 +388,24 @@
 
             const generateSpecificReport = (type) => {
                 const { bank, status, startDate, endDate } = reportFilters;
-                
                 const targetData = cases.filter(c => {
                     const matchBank = bank ? c.institution === bank : true;
                     const matchStatus = status.length > 0 ? status.includes(c.status) : true;
-                    
-                    // Date Logic - parsing "DD/MM/YYYY, HH:MM:SS"
                     let matchDate = true;
                     if (startDate || endDate) {
                         try {
                             const dateParts = (c.timestamp || "").split(',')[0].split('/');
-                            // Convert to YYYY-MM-DD for comparison
                             if (dateParts.length === 3) {
                                 const caseDate = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
                                 if (startDate) matchDate = matchDate && caseDate >= new Date(startDate);
                                 if (endDate) matchDate = matchDate && caseDate <= new Date(endDate);
                             }
-                        } catch (e) {
-                            console.error("Date parse error", e);
-                        }
+                        } catch (e) { console.error("Date error", e); }
                     }
                     return matchBank && matchStatus && matchDate;
                 });
 
-                if (targetData.length === 0) return alert("No records found for the selected criteria.");
+                if (targetData.length === 0) return alert("No records found.");
 
                 if (type === 'excel') {
                     const excelData = targetData.map(c => {
@@ -450,42 +422,13 @@
                     const { jsPDF } = window.jspdf;
                     const doc = new jsPDF('l', 'mm', 'a4');
                     doc.setFontSize(18); doc.text("OFFICIAL STATUS REPORT", 14, 20);
-                    doc.setFontSize(10); 
-                    let subText = `Generated on: ${new Date().toLocaleString()}`;
-                    if (startDate || endDate) subText += ` | Range: ${startDate || 'Start'} to ${endDate || 'Now'}`;
-                    doc.text(subText, 14, 27);
-
-                    const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Received"]];
-                    const body = targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]);
-                    
-                    doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
-
-                    // Only add signature block if 'Delivered' status is in the filter
+                    doc.autoTable({ head: [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Received"]], body: targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]), startY: 35, theme: 'grid' });
                     if (status.includes('Delivered')) {
-                        const finalY = doc.lastAutoTable.finalY;
-                        const pageHeight = doc.internal.pageSize.height;
-                        let yPos = finalY + 30; // 30mm below table
-
-                        // Check if we need a new page
-                        if (yPos + 30 > pageHeight) {
-                            doc.addPage();
-                            yPos = 40;
-                        }
-
-                        doc.setFontSize(10);
-                        doc.setFont("helvetica", "bold");
-                        
-                        // Three columns: Prepared By (Left), Received By (Center), Delivered By (Right)
-                        doc.text("Prepared By:", 30, yPos);
-                        doc.text("___________________", 30, yPos + 10);
-                        
-                        doc.text("Received By:", 125, yPos);
-                        doc.text("___________________", 125, yPos + 10);
-                        
-                        doc.text("Delivered By:", 220, yPos);
-                        doc.text("___________________", 220, yPos + 10);
+                        let yPos = doc.lastAutoTable.finalY + 30;
+                        doc.text("Prepared By: ___________", 30, yPos);
+                        doc.text("Received By: ___________", 125, yPos);
+                        doc.text("Delivered By: ___________", 220, yPos);
                     }
-
                     doc.save("Report.pdf");
                 }
                 setShowReportModal(false);
@@ -494,28 +437,21 @@
             const filteredData = useMemo(() => {
                 return cases.filter(c => {
                     const s = search.toLowerCase();
-                    const matchesSearch = (c.institution || "").toLowerCase().includes(s) || (c.serialNo || "").toLowerCase().includes(s) || (c.reference || "").toLowerCase().includes(s) || (c.buyerName || "").toLowerCase().includes(s) || (c.sellerName || "").toLowerCase().includes(s);
-                    let matchesDate = true;
+                    const ms = (c.institution || "").toLowerCase().includes(s) || (c.serialNo || "").toLowerCase().includes(s) || (c.reference || "").toLowerCase().includes(s) || (c.buyerName || "").toLowerCase().includes(s) || (c.sellerName || "").toLowerCase().includes(s);
+                    let md = true;
                     if (startDate || endDate) {
-                        const dateParts = (c.timestamp || "").split(',')[0].split('/');
-                        const caseDate = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
-                        if (startDate) matchesDate = matchesDate && caseDate >= new Date(startDate);
-                        if (endDate) matchesDate = matchesDate && caseDate <= new Date(endDate);
+                        const dp = (c.timestamp || "").split(',')[0].split('/');
+                        const cd = new Date(`${dp[2]}-${dp[1]}-${dp[0]}`);
+                        if (startDate) md = md && cd >= new Date(startDate);
+                        if (endDate) md = md && cd <= new Date(endDate);
                     }
-                    return matchesSearch && matchesDate;
+                    return ms && md;
                 });
             }, [cases, search, startDate, endDate]);
 
-            // UI Helpers
-            const openNewEntry = () => { setIsEditing(false); setFormData(emptyForm); setShowModal(true); };
-            const openModify = (c) => { setIsEditing(true); setFormData(c); setShowModal(true); };
             const closeModal = () => { 
-                setShowModal(false); 
-                setIsEditing(false); 
-                setIsCameraActive(false); 
-                if(videoRef.current && videoRef.current.srcObject) {
-                    videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-                }
+                setShowModal(false); setIsEditing(false); setIsCameraActive(false); 
+                if(videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
             };
             
             const openCamera = async () => { 
@@ -523,20 +459,16 @@
                 try { 
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); 
                     if (videoRef.current) videoRef.current.srcObject = stream; 
-                } catch (err) { 
-                    alert("Unable to access camera."); 
-                    setIsCameraActive(false); 
-                } 
+                } catch (err) { alert("Camera access denied."); setIsCameraActive(false); } 
             };
             
             const snap = () => { 
                 const canvas = canvasRef.current; 
-                const video = videoRef.current; 
-                canvas.width = video.videoWidth; 
-                canvas.height = video.videoHeight; 
-                canvas.getContext('2d').drawImage(video, 0, 0); 
+                canvas.width = videoRef.current.videoWidth; 
+                canvas.height = videoRef.current.videoHeight; 
+                canvas.getContext('2d').drawImage(videoRef.current, 0, 0); 
                 setFormData({ ...formData, photo: canvas.toDataURL('image/jpeg', 0.5) }); 
-                video.srcObject.getTracks().forEach(t => t.stop()); 
+                videoRef.current.srcObject.getTracks().forEach(t => t.stop()); 
                 setIsCameraActive(false); 
             };
 
@@ -547,12 +479,11 @@
                 setReportFilters({...reportFilters, status: current});
             };
 
-            if (authLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 bg-slate-900 tracking-widest animate-pulse uppercase">SYSTEM INITIALIZING...</div>;
+            if (authLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 bg-slate-900 tracking-widest animate-pulse">SYSTEM INITIALIZING...</div>;
             if (!user) return <LoginScreen />;
 
             return (
                 <div className="min-h-screen flex flex-col md:flex-row relative">
-                    {/* Sidebar */}
                     <aside className={`no-print w-72 bg-white border-r flex-col p-6 h-screen z-50 transition-transform duration-300 md:translate-x-0 fixed md:sticky top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:flex'}`}>
                         <div className="flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800"><div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>IRSHAD <span className="text-blue-600">SYSTEM</span></div>
                         <div className="space-y-1 overflow-y-auto no-scrollbar max-h-[50vh]">
@@ -562,21 +493,12 @@
                             <SidebarLink active={showSettings} onClick={() => { setShowSettings(true); setIsMobileMenuOpen(false); }} icon="settings" label="Categories" />
                         </div>
                         <div className="mt-auto pt-4 border-t space-y-2">
-                            <button onClick={() => { setShowImportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-slate-200 transition-all tracking-wider"><Icon name="upload-cloud" size={16}/> Bulk Import</button>
-                            <button onClick={() => { setShowReportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md hover:bg-indigo-700 transition-all tracking-wider"><Icon name="file-text" size={16}/> Specific Report</button>
-                            
-                            <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => generateSpecificReport('excel')} className="py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center justify-center gap-1"><Icon name="file-spreadsheet" size={12}/> Excel</button>
-                                <button onClick={exportVaultPDF} className="py-2.5 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-900 transition-all flex items-center justify-center gap-1"><Icon name="printer" size={12}/> PDF</button>
-                            </div>
-
-                            <button onClick={openNewEntry} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl mt-2 flex items-center justify-center gap-2 hover:bg-blue-700 transition-all tracking-wider"><Icon name="plus" /> New Entry</button>
-                            
+                            <button onClick={() => setShowImportModal(true)} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-2 tracking-wider"><Icon name="upload-cloud" size={16}/> Bulk Import</button>
+                            <button onClick={() => setShowReportModal(true)} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 tracking-wider"><Icon name="file-text" size={16}/> Specific Report</button>
+                            <button onClick={openNewEntry} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl mt-2 flex items-center justify-center gap-2 tracking-wider"><Icon name="plus" /> New Entry</button>
                             <div className="flex flex-col gap-1 pt-2">
-                                <button onClick={resetSystem} className="w-full py-2 bg-red-50 text-red-500 rounded-xl text-[9px] font-black uppercase border border-red-100 hover:bg-red-500 hover:text-white transition-all tracking-widest flex items-center justify-center gap-2">
-                                    <Icon name="refresh-ccw" size={12}/> Reset System
-                                </button>
-                                <button onClick={() => { if(confirm("CRITICAL: Logout?")) signOut(auth); }} className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-red-50 hover:text-red-600 transition-all tracking-wider"><Icon name="log-out" size={16}/> Logout</button>
+                                <button onClick={resetSystem} className="w-full py-2 bg-red-50 text-red-500 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><Icon name="refresh-ccw" size={12}/> Reset System</button>
+                                <button onClick={() => signOut(auth)} className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-xs font-black flex items-center justify-center gap-2 tracking-wider"><Icon name="log-out" size={16}/> Logout</button>
                             </div>
                         </div>
                     </aside>
@@ -589,87 +511,47 @@
                     <main className="flex-1 p-4 md:p-10 pb-24 overflow-x-hidden">
                         {currentView === 'dashboard' && (
                             <div className="space-y-6 animate-in fade-in duration-500">
-                                {/* All-in-one Analytics Box */}
                                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm w-full md:max-w-xs">
-                                    <h2 className="font-bold text-slate-800 text-xs mb-3 uppercase tracking-tight flex items-center gap-2"><Icon name="pie-chart" size={14} className="text-blue-600"/> Analytics</h2>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-separate border-spacing-0">
-                                            <thead><tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="pb-2 pl-2 border-b">Status</th><th className="pb-2 text-right pr-2 border-b">Count</th></tr></thead>
-                                            <tbody className="divide-y divide-slate-50">
-                                                <tr className="group hover:bg-slate-50 transition-colors"><td className="py-2 pl-2 font-black text-slate-800 flex items-center gap-2 text-[10px]"><div className="p-1 bg-slate-100 rounded text-slate-600"><Icon name="layers" size={10} /></div>TOTAL</td><td className="py-2 text-right pr-2 font-black text-xs text-slate-900">{cases.length}</td></tr>
-                                                {statusList.map(st => (<tr key={st} className="group hover:bg-slate-50 transition-colors"><td className="py-2 pl-2 font-bold text-slate-600 flex items-center gap-2 text-[10px]"><div className={`w-5 h-5 rounded flex items-center justify-center ${st === 'Delivered' ? 'bg-emerald-100 text-emerald-600' : st === 'Pending' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}><Icon name="activity" size={10} /></div>{st}</td><td className="py-2 text-right pr-2 font-bold text-xs text-slate-700">{cases.filter(c => c.status === st).length}</td></tr>))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <h2 className="font-bold text-slate-800 text-xs mb-3 uppercase flex items-center gap-2"><Icon name="pie-chart" size={14} className="text-blue-600"/> Analytics</h2>
+                                    <table className="w-full text-left">
+                                        <thead><tr className="text-[9px] font-black text-slate-400 uppercase border-b"><th className="pb-2 pl-2">Status</th><th className="pb-2 text-right pr-2">Count</th></tr></thead>
+                                        <tbody className="divide-y">
+                                            <tr><td className="py-2 pl-2 font-black text-[10px]">TOTAL</td><td className="py-2 text-right pr-2 font-black text-xs">{cases.length}</td></tr>
+                                            {statusList.map(st => (<tr key={st}><td className="py-2 pl-2 font-bold text-[10px]">{st}</td><td className="py-2 text-right pr-2 font-bold text-xs">{cases.filter(c => c.status === st).length}</td></tr>))}
+                                        </tbody>
+                                    </table>
                                 </div>
 
-                                {/* Optimized Recent Entries Table */}
                                 <div className="bg-white rounded-[2.5rem] p-4 md:p-10 border shadow-md">
-                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                                        <div>
-                                            <h2 className="font-black text-slate-800 text-2xl uppercase tracking-tighter">Recent Activities</h2>
-                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Live Updates from Cloud Storage</p>
-                                        </div>
-                                        <button onClick={() => setCurrentView('list')} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-2">Explore Full Vault <Icon name="chevron-right" size={14}/></button>
+                                    <div className="flex justify-between items-center mb-8">
+                                        <h2 className="font-black text-slate-800 text-2xl uppercase">Recent Activities</h2>
+                                        <button onClick={() => setCurrentView('list')} className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-2">Explore Vault <Icon name="chevron-right" size={14}/></button>
                                     </div>
-                                    
-                                    <div className="table-container overflow-x-auto -mx-4 md:mx-0">
-                                        <table className="w-full text-left min-w-[900px] border-separate border-spacing-0">
+                                    <div className="table-container overflow-x-auto">
+                                        <table className="w-full min-w-[900px] border-separate border-spacing-0">
                                             <thead>
-                                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                                                    <th className="pb-6 pl-4 pr-6 border-b border-slate-100">SI NO</th>
-                                                    <th className="pb-6 pr-6 border-b border-slate-100">Reference</th>
-                                                    <th className="pb-6 pr-6 border-b border-slate-100">Institution</th>
-                                                    <th className="pb-6 pr-6 border-b border-slate-100">Party Details</th>
-                                                    <th className="pb-6 pr-6 border-b border-slate-100">Status</th>
-                                                    <th className="pb-6 text-right pr-4 border-b border-slate-100">Manage</th>
+                                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                    <th className="pb-6 border-b">SI NO</th>
+                                                    <th className="pb-6 border-b">Reference</th>
+                                                    <th className="pb-6 border-b">Institution</th>
+                                                    <th className="pb-6 border-b">Status</th>
+                                                    <th className="pb-6 text-right pr-4 border-b">Manage</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-50">
+                                            <tbody className="divide-y">
                                                 {cases.slice(0, 10).map(c => (
-                                                    <tr key={c.id} className="group hover:bg-slate-50/80 transition-all cursor-default">
-                                                        <td className="py-6 pl-4 pr-6">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-[10px] shadow-lg group-hover:scale-110 transition-transform">#{c.serialNo}</div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-6 pr-6 font-bold text-slate-500 text-xs">{c.reference || "-"}</td>
-                                                        <td className="py-6 pr-6">
-                                                            <div className="flex flex-col">
-                                                                <span className="font-black text-slate-800 text-sm tracking-tight">{c.institution || "-"}</span>
-                                                                <span className="text-[9px] font-black text-blue-500 uppercase mt-0.5">{c.caseType}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-6 pr-6">
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="w-10 text-[8px] font-black text-slate-300 uppercase">Buyer</span>
-                                                                    <span className="text-[11px] font-bold text-slate-700 uppercase truncate max-w-[140px]">{c.buyerName || "—"}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 border-t border-slate-50 pt-1">
-                                                                    <span className="w-10 text-[8px] font-black text-slate-300 uppercase">Seller</span>
-                                                                    <span className="text-[11px] font-bold text-slate-600 uppercase truncate max-w-[140px]">{c.sellerName || "—"}</span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-6 pr-6">
-                                                            <div className="flex flex-col">
-                                                                <button onClick={() => toggleStatus(c.id)} className="status-btn self-start"><StatusBadge status={c.status} /></button>
-                                                                <span className="text-[8px] font-bold text-slate-400 mt-1.5 ml-1">{c.statusTimestamp || c.timestamp}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-6 text-right pr-4">
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm rounded-xl transition-all"><Icon name="eye" size={16}/></button>
-                                                                <button onClick={() => openModify(c)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-amber-500 hover:border-amber-200 hover:shadow-sm rounded-xl transition-all"><Icon name="edit-3" size={16}/></button>
-                                                                <button onClick={() => softDelete(c.id)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-sm rounded-xl transition-all"><Icon name="trash-2" size={16}/></button>
-                                                            </div>
+                                                    <tr key={c.id} className="group hover:bg-slate-50 transition-all">
+                                                        <td className="py-6 font-black text-xs">#{c.serialNo}</td>
+                                                        <td className="py-6 text-xs text-slate-500 font-bold">{c.reference}</td>
+                                                        <td className="py-6 font-black text-sm">{c.institution}</td>
+                                                        <td className="py-6"><button onClick={() => toggleStatus(c.id)}><StatusBadge status={c.status} /></button></td>
+                                                        <td className="py-6 text-right pr-4 flex justify-end gap-1">
+                                                            <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 border rounded-xl"><Icon name="eye" size={16}/></button>
+                                                            <button onClick={() => openModify(c)} className="p-2.5 border rounded-xl"><Icon name="edit-3" size={16}/></button>
+                                                            <button onClick={() => softDelete(c.id)} className="p-2.5 border rounded-xl"><Icon name="trash-2" size={16}/></button>
                                                         </td>
                                                     </tr>
                                                 ))}
-                                                {cases.length === 0 && (
-                                                    <tr><td colSpan="6" className="py-20 text-center text-slate-300 font-black uppercase tracking-[0.2em] text-xs">No records found in the vault</td></tr>
-                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -679,79 +561,70 @@
 
                         {currentView === 'list' && (
                             <div className="space-y-6">
-                                <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                                    <div className="relative mb-4"><Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Search Vault..." className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl outline-none shadow-inner" value={search} onChange={e => {setSearch(e.target.value); setVisibleCount(20);}} /></div>
-                                    <div className="flex flex-wrap gap-4">
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={startDate} onChange={e => {setStartDate(e.target.value); setVisibleCount(20);}} /></div>
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={endDate} onChange={e => {setEndDate(e.target.value); setVisibleCount(20);}} /></div>
+                                <div className="bg-white p-6 rounded-[2rem] border shadow-sm flex flex-col gap-4">
+                                    <input type="text" placeholder="Search Vault..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={search} onChange={e => setSearch(e.target.value)} />
+                                    <div className="flex gap-4">
+                                        <input type="date" className="flex-1 p-3 bg-slate-50 rounded-xl" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                        <input type="date" className="flex-1 p-3 bg-slate-50 rounded-xl" value={endDate} onChange={e => setEndDate(e.target.value)} />
                                     </div>
                                 </div>
-                                
                                 <div className="grid gap-4">
                                     {filteredData.slice(0, visibleCount).map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
-                                            <div className="flex items-center gap-5 w-full">
-                                                <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0">#{c.serialNo}</div>
-                                                <div className="overflow-hidden">
-                                                    <h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p>
+                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs">#{c.serialNo}</div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800">{c.institution} ({c.reference})</h3>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">{c.buyerName} vs {c.sellerName}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                                                <button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button>
-                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
-                                                <button onClick={() => openModify(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-500 rounded-xl transition-all"><Icon name="edit-3" size={18} /></button>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => toggleStatus(c.id)}><StatusBadge status={c.status} /></button>
+                                                <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 rounded-xl"><Icon name="eye" size={18} /></button>
                                             </div>
                                         </div>
                                     ))}
+                                    {filteredData.length > visibleCount && (
+                                        <button onClick={() => setVisibleCount(v => v + 20)} className="w-full py-4 bg-white border rounded-2xl font-black text-slate-400 uppercase text-xs">Load More Records</button>
+                                    )}
                                 </div>
-
-                                {filteredData.length > visibleCount && (
-                                    <button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-xs hover:bg-slate-50 transition-all tracking-widest shadow-sm">Load More Records ({filteredData.length - visibleCount} Remaining)</button>
-                                )}
                             </div>
                         )}
 
                         {currentView === 'details' && selectedCase && (
                             <div className="max-w-4xl mx-auto pb-10">
-                                <div className="mb-4 flex justify-between items-center">
-                                    <button onClick={() => setCurrentView('dashboard')} className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase hover:text-blue-600 transition-all"><Icon name="arrow-left" size={12} /> Return</button>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => openModify(selectedCase)} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-100 transition-all shadow-sm"><Icon name="edit-3" size={12} className="inline mr-1" /> Edit</button>
-                                        <button onClick={() => softDelete(selectedCase.id)} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all shadow-sm"><Icon name="trash-2" size={12} className="inline mr-1" /> Delete</button>
-                                    </div>
-                                </div>
+                                <button onClick={() => setCurrentView('dashboard')} className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase mb-4"><Icon name="arrow-left" size={12} /> Return</button>
                                 <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border">
                                     <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
-                                        <div><h2 className="text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div>
-                                        <button onClick={() => toggleStatus(selectedCase.id)} className="status-btn"><StatusBadge status={selectedCase.status} /></button>
+                                        <div><h2 className="text-4xl font-black tracking-tighter">Case #{selectedCase.serialNo}</h2></div>
+                                        <StatusBadge status={selectedCase.status} />
                                     </div>
                                     <div className="p-8 bg-[#F8FAFC]">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
-                                            {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (
-                                                <DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />
+                                            {Object.entries(selectedCase.customData || {}).map(([h, v]) => (
+                                                <DetailCard key={h} label={h} value={v} icon="plus-circle" />
                                             ))}
                                         </div>
-                                        {selectedCase.photo && <div className="mt-8"><p className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">Attachment</p><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>}
+                                        {selectedCase.photo && <img src={selectedCase.photo} className="mt-8 w-full rounded-3xl border shadow-lg" />}
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {currentView === 'trash' && (
-                             <div className="space-y-6">
-                                <div className="bg-white p-6 rounded-[2rem] border flex justify-between items-center"><div><h2 className="text-xl font-black uppercase tracking-tight">Recycle Bin</h2><p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Recently Deleted</p></div></div>
+                            <div className="space-y-6">
+                                <h2 className="text-xl font-black uppercase">Recycle Bin</h2>
                                 <div className="grid gap-4">
                                     {trash.map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border flex items-center justify-between opacity-75 hover:opacity-100 transition-all shadow-sm">
+                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border flex items-center justify-between">
                                             <div className="flex items-center gap-5">
                                                 <div className="w-12 h-12 bg-red-50 text-red-400 rounded-xl flex items-center justify-center font-black text-xs">DEL</div>
                                                 <div><h3 className="font-bold">{c.institution} (#{c.serialNo})</h3><p className="text-[10px] text-slate-400">Deleted: {c.deletedAt}</p></div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => restoreItem(c.id)} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-100 transition-all shadow-sm"><Icon name="rotate-ccw" size={12} className="inline mr-1" /> Restore</button>
-                                                <button onClick={() => permanentDelete(c.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all shadow-sm">Forever</button>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => restoreItem(c.id)} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase">Restore</button>
+                                                <button onClick={() => permanentDelete(c.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase">Forever</button>
                                             </div>
                                         </div>
                                     ))}
@@ -760,149 +633,83 @@
                         )}
                     </main>
 
-                    {/* Entry Modal */}
                     {showModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto no-scrollbar">
-                                <div className="p-8 border-b flex justify-between items-center sticky top-0 bg-white z-10 shadow-sm"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3><button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full transition-all"><Icon name="x" className="text-slate-400"/></button></div>
+                            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
+                                <div className="p-8 border-b flex justify-between items-center sticky top-0 bg-white z-10"><h3 className="font-black text-xl uppercase tracking-tighter">Entry Details</h3><button onClick={closeModal}><Icon name="x"/></button></div>
                                 <form onSubmit={handleSave} className="p-8 space-y-6">
-                                    
-                                    {/* CORE INFO */}
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Case Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
-                                            <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
-                                            <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
-                                            <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
-                                            <Input label="Remark" value={formData.remark} onChange={v => setFormData({...formData, remark: v})} />
-                                        </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
+                                        <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
+                                        <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
+                                        <Input label="Buyer Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
+                                        <Input label="Seller Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
+                                        <Select label="Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
                                     </div>
-
-                                    {/* BUYER INFO */}
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Buyer Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
-                                            <Input label="ID Number" value={formData.buyerId} onChange={v => setFormData({...formData, buyerId: v})} />
-                                            <Input label="Email" type="email" value={formData.buyerEmail} onChange={v => setFormData({...formData, buyerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.buyerPhone} onChange={v => setFormData({...formData, buyerPhone: v})} />
-                                        </div>
-                                    </div>
-
-                                    {/* SELLER INFO */}
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Seller Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
-                                            <Input label="ID Number" value={formData.sellerId} onChange={v => setFormData({...formData, sellerId: v})} />
-                                            <Input label="Email" type="email" value={formData.sellerEmail} onChange={v => setFormData({...formData, sellerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.sellerPhone} onChange={v => setFormData({...formData, sellerPhone: v})} />
-                                        </div>
-                                    </div>
-
-                                    {/* STATUS & DATES */}
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Processing Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
-                                            <Input label="Processor Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
-                                            <Input label="Date Received" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
-                                            <Input label="Date Handover" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
-                                        </div>
-                                    </div>
-
-                                    {/* DYNAMIC FIELDS FROM EXCEL */}
-                                    {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).length > 0 && (
-                                        <div className="space-y-4">
-                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Extra Fields (Imported)</h4>
-                                            <div className="grid grid-cols-1 gap-4">
-                                                {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).map(h => (
-                                                    <Input key={h} label={h} value={formData.customData?.[h] || ''} onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="border-t pt-4">
                                         {!isCameraActive ? (
-                                            <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all">
-                                                {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl mb-2"/> : <Icon name="camera" size={24} />}
-                                                <span className="text-[10px] font-black uppercase tracking-widest">{formData.photo ? 'Retake Photo' : 'Capture Image Attachment'}</span>
+                                            <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed rounded-3xl flex flex-col items-center gap-2 text-slate-400">
+                                                {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl"/> : <Icon name="camera" size={24} />}
+                                                <span className="text-[10px] font-black uppercase">Capture Image Attachment</span>
                                             </button>
                                         ) : (
                                             <div className="space-y-4">
-                                                <video ref={videoRef} autoPlay playsInline className="w-full rounded-3xl bg-black aspect-video object-cover shadow-2xl" />
+                                                <video ref={videoRef} autoPlay playsInline className="w-full rounded-3xl bg-black aspect-video object-cover" />
                                                 <canvas ref={canvasRef} className="hidden" />
                                                 <div className="flex gap-2">
-                                                    <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Capture</button>
-                                                    <button type="button" onClick={() => { setIsCameraActive(false); if(videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); }} className="px-8 bg-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500">Cancel</button>
+                                                    <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg">Capture</button>
+                                                    <button type="button" onClick={() => setIsCameraActive(false)} className="px-8 bg-slate-100 rounded-2xl text-xs font-black uppercase">Cancel</button>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all">Save Changes</button>
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest shadow-2xl">Save Changes</button>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* Progress Loader for Bulk Import / Reset */}
                     {importProgress !== null && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-lg">
-                            <div className="bg-white w-full max-sm rounded-[2rem] p-8 text-center space-y-6 animate-in zoom-in duration-300">
-                                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="cloud-upload" className="text-blue-600 animate-pulse" size={40}/></div>
-                                <h3 className="font-black text-xl uppercase tracking-tighter">Synchronizing Cloud Data</h3>
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 text-center space-y-6">
+                                <Icon name="cloud-upload" className="text-blue-600 animate-pulse mx-auto" size={40}/>
+                                <h3 className="font-black text-xl uppercase tracking-tighter">Synchronizing Data</h3>
                                 <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
                                     <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${importProgress}%` }}></div>
                                 </div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Processing {importProgress}% ... Please wait</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase">Processing {importProgress}% ...</p>
                             </div>
                         </div>
                     )}
 
-                    {/* Import Modal */}
                     {showImportModal && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6 text-center">
                                 <Icon name="upload-cloud" size={56} className="mx-auto text-blue-600 mb-4" />
                                 <h3 className="font-black text-2xl uppercase tracking-tighter">Bulk Excel Import</h3>
-                                <div className="relative border-4 border-dashed rounded-[2.5rem] p-12 hover:bg-slate-50 hover:border-blue-300 cursor-pointer transition-all">
+                                <div className="relative border-4 border-dashed rounded-[2.5rem] p-12 hover:bg-slate-50 cursor-pointer transition-all">
                                     <input type="file" accept=".xlsx, .xls" onChange={handleBulkImport} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                                     <Icon name="file-spreadsheet" size={40} className="mx-auto text-slate-300" />
-                                    <span className="text-[11px] font-black uppercase mt-4 block text-slate-400 tracking-widest">Upload Excel Data</span>
+                                    <span className="text-[11px] font-black uppercase mt-4 block text-slate-400">Upload Excel Data</span>
                                 </div>
-                                <button onClick={() => setShowImportModal(false)} className="w-full py-5 bg-slate-800 text-white rounded-2xl font-black uppercase text-xs hover:bg-slate-900 transition-all tracking-widest">Cancel</button>
+                                <button onClick={() => setShowImportModal(false)} className="w-full py-5 bg-slate-800 text-white rounded-2xl font-black uppercase text-xs">Cancel</button>
                             </div>
                         </div>
                     )}
 
-                    {/* Report and Settings modals */}
                     {showReportModal && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6">
-                                <div className="text-center"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tight">Status Report</h3></div>
+                                <div className="text-center"><h3 className="font-black text-xl uppercase">Status Report</h3></div>
                                 <div className="space-y-4">
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label>
-                                            <input type="date" value={reportFilters.startDate} onChange={e => setReportFilters({...reportFilters, startDate: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold" />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label>
-                                            <input type="date" value={reportFilters.endDate} onChange={e => setReportFilters({...reportFilters, endDate: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold" />
-                                        </div>
-                                    </div>
                                     <select value={reportFilters.bank} onChange={e => setReportFilters({...reportFilters, bank: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold"><option value="">All Organizations</option>{bankList.map(b => <option key={b} value={b}>{b}</option>)}</select>
-                                    <div className="grid grid-cols-2 gap-2">{statusList.map(s => (<button key={s} onClick={() => toggleReportStatus(s)} className={`p-3 rounded-xl text-[10px] font-black uppercase border transition-all ${reportFilters.status.includes(s) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}>{s}</button>))}</div>
+                                    <div className="grid grid-cols-2 gap-2">{statusList.map(s => (<button key={s} onClick={() => toggleReportStatus(s)} className={`p-3 rounded-xl text-[10px] font-black uppercase border ${reportFilters.status.includes(s) ? 'bg-blue-600 text-white' : 'bg-white'}`}>{s}</button>))}</div>
                                 </div>
-                                <div className="pt-4 flex flex-col gap-2">
-                                    <div className="flex gap-2">
-                                        <button onClick={() => generateSpecificReport('excel')} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"><Icon name="file-spreadsheet" size={16}/> Excel</button>
-                                        <button onClick={() => generateSpecificReport('pdf')} className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-xs shadow-lg hover:bg-slate-900 transition-all flex items-center justify-center gap-2"><Icon name="printer" size={16}/> PDF</button>
-                                    </div>
-                                    <button onClick={() => setShowReportModal(false)} className="w-full py-3 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs hover:bg-slate-200 transition-all">Close</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => generateSpecificReport('excel')} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs">Excel</button>
+                                    <button onClick={() => generateSpecificReport('pdf')} className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-xs">PDF</button>
                                 </div>
+                                <button onClick={() => setShowReportModal(false)} className="w-full py-3 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs">Close</button>
                             </div>
                         </div>
                     )}
@@ -913,7 +720,7 @@
                                 <CategoryManager title="Registered Institutions" list={bankList} onUpdate={(val) => updateSettings('banks', val)} />
                                 <CategoryManager title="Lifecycle Stages" list={statusList} onUpdate={(val) => updateSettings('statuses', val)} />
                                 <CategoryManager title="Extra Field Headings" list={customHeadings} onUpdate={(val) => updateSettings('headings', val)} />
-                                <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black uppercase hover:bg-black transition-all tracking-widest shadow-2xl">Return to System</button>
+                                <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black uppercase tracking-widest shadow-2xl">Return to System</button>
                             </div>
                         </div>
                     )}
@@ -923,9 +730,9 @@
 
         const DetailCard = ({ label, value, icon }) => (<div className="bg-white p-4 rounded-2xl border border-slate-50 shadow-sm flex items-start gap-3"><div className="p-2.5 bg-slate-50 text-slate-400 rounded-xl shrink-0"><Icon name={icon} size={16} /></div><div className="overflow-hidden"><span className="text-[8px] font-black text-slate-400 uppercase block tracking-widest mb-0.5">{label}</span><p className="font-black text-[11px] text-slate-800 truncate">{value || '-'}</p></div></div>);
         const SidebarLink = ({ active, onClick, icon, label }) => (<button onClick={onClick} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-sm transition-all ${active ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name={icon} size={18} /> {label}</button>);
-        const Input = ({ label, type = "text", ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><input type={type} {...props} onChange={e => props.onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-blue-100 outline-none transition-all" /></div>);
-        const Select = ({ label, options, value, onChange }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><div className="relative"><select value={value} onChange={e => onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 appearance-none shadow-inner outline-none transition-all focus:ring-2 focus:ring-blue-100">{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select><Icon name="chevron-down" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" /></div></div>);
-        const CategoryManager = ({ title, list, onUpdate }) => { const [val, setVal] = useState(''); return (<div className="space-y-4"><h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest border-l-4 border-blue-600 pl-3">{title}</h4><div className="flex gap-3"><input type="text" className="flex-1 bg-slate-100 p-4 rounded-2xl border-none font-bold text-sm shadow-inner outline-none" placeholder={`Add new...`} value={val} onChange={e => setVal(e.target.value)} /><button onClick={() => {if(val){onUpdate([...list, val]); setVal('')}}} className="bg-blue-600 text-white px-6 rounded-2xl font-black shadow-lg hover:scale-105 active:scale-95 transition-all"><Icon name="plus" /></button></div><div className="flex flex-wrap gap-2">{list.map((item, i) => (<div key={i} className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-100 group shadow-sm transition-all hover:border-red-200"><span className="text-sm font-black text-slate-700">{item}</span><button onClick={() => onUpdate(list.filter((_, idx) => idx !== i))} className="text-slate-300 group-hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></div>))}</div></div>); };
+        const Input = ({ label, type = "text", ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><input type={type} {...props} onChange={e => props.onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 shadow-inner outline-none transition-all" /></div>);
+        const Select = ({ label, options, value, onChange }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><div className="relative"><select value={value} onChange={e => onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 appearance-none shadow-inner outline-none transition-all">{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select><Icon name="chevron-down" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" /></div></div>);
+        const CategoryManager = ({ title, list, onUpdate }) => { const [val, setVal] = useState(''); return (<div className="space-y-4"><h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest border-l-4 border-blue-600 pl-3">{title}</h4><div className="flex gap-3"><input type="text" className="flex-1 bg-slate-100 p-4 rounded-2xl border-none font-bold text-sm outline-none" placeholder={`Add new...`} value={val} onChange={e => setVal(e.target.value)} /><button onClick={() => {if(val){onUpdate([...list, val]); setVal('')}}} className="bg-blue-600 text-white px-6 rounded-2xl font-black shadow-lg"><Icon name="plus" /></button></div><div className="flex flex-wrap gap-2">{list.map((item, i) => (<div key={i} className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border group shadow-sm"><span className="text-sm font-black text-slate-700">{item}</span><button onClick={() => onUpdate(list.filter((_, idx) => idx !== i))} className="text-slate-300 group-hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></div>))}</div></div>); };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
