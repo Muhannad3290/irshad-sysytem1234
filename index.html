@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v7.0 (Two-Step Verification)</title>
+    <title>IRSHAD SYSTEM | Registry v7.1 (Smart Scanner)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -18,11 +18,23 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .status-btn:active { transform: scale(0.95); }
         .login-wrapper { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        /* Scanner animation line */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #3b82f6;
+            box-shadow: 0 0 4px #3b82f6;
+            animation: scan 2s linear infinite;
+        }
+        @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
     </style>
 
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -49,21 +61,16 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        
-        // Expose Firebase to Global Window
         window.db = getFirestore(app);
         window.auth = getAuth(app);
         window.fs = { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch };
         window.fa = { signInWithEmailAndPassword, signOut, onAuthStateChanged };
-        
-        // Notify React that Firebase is ready
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // SYSTEM FIELDS MAPPING
         const SYSTEM_FIELDS = [
             { key: 'serialNo', label: 'Serial No' },
             { key: 'reference', label: 'Reference' },
@@ -84,7 +91,6 @@
             { key: 'dateHandover', label: 'Date Handover' }
         ];
 
-        // --- OPTIMIZED COMPONENTS ---
         const Icon = React.memo(({ name, size = 20, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
@@ -177,11 +183,15 @@
             const [endDate, setEndDate] = useState('');
             const [visibleCount, setVisibleCount] = useState(20);
 
-            // NEW STATE FOR 2-STEP STATUS MODAL
+            // STATE FOR STATUS MODAL
             const [showStatusModal, setShowStatusModal] = useState(false);
             const [statusTarget, setStatusTarget] = useState(null);
             const [updaterName, setUpdaterName] = useState(''); 
-            const [selectedNewStatus, setSelectedNewStatus] = useState(null); // Stores the status selected in step 1
+            const [selectedNewStatus, setSelectedNewStatus] = useState(null);
+
+            // STATE FOR OCR & SCANNING
+            const [isScanning, setIsScanning] = useState(false);
+            const [scanStatus, setScanStatus] = useState('');
 
             const emptyForm = {
                 serialNo: '', reference: '', institution: '', caseType: 'Sale', remark: '',
@@ -196,13 +206,11 @@
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
 
-            // 1. Wait for Firebase
             useEffect(() => {
                 if (window.auth) setFirebaseReady(true);
                 else window.addEventListener('firebase-ready', () => setFirebaseReady(true));
             }, []);
 
-            // 2. Listen for User Auth
             useEffect(() => {
                 if (firebaseReady) {
                     const unsub = window.fa.onAuthStateChanged(window.auth, (u) => setUser(u));
@@ -210,7 +218,6 @@
                 }
             }, [firebaseReady]);
 
-            // 3. Data Fetching
             useEffect(() => {
                 if (!user || !firebaseReady) return;
                 
@@ -236,21 +243,18 @@
 
             // --- FEATURES ---
 
-            // CONFIRM UPDATE LOGIC (Step 2)
             const confirmStatusUpdate = async () => {
                 if (!statusTarget || !selectedNewStatus) return;
                 if (!updaterName.trim()) return alert("Please enter who is performing this update."); 
 
                 const now = new Date().toLocaleString('en-GB');
-                
                 try {
                     await window.fs.updateDoc(window.fs.doc(window.db, "cases", statusTarget.id), { 
                         status: selectedNewStatus, 
                         statusTimestamp: now,
-                        lastUpdatedBy: updaterName // Saves the manually entered name
+                        lastUpdatedBy: updaterName 
                     });
                     
-                    // Update local selection if in detail view
                     if (selectedCase && selectedCase.id === statusTarget.id) {
                         setSelectedCase({
                             ...selectedCase,
@@ -259,19 +263,14 @@
                             lastUpdatedBy: updaterName
                         });
                     }
-
-                    setShowStatusModal(false);
-                    setStatusTarget(null);
-                    setSelectedNewStatus(null);
-                } catch (err) {
-                    alert("Error updating status: " + err.message);
-                }
+                    setShowStatusModal(false); setStatusTarget(null); setSelectedNewStatus(null);
+                } catch (err) { alert("Error updating status: " + err.message); }
             };
 
             const openStatusModal = (item) => {
                 setStatusTarget(item);
                 setUpdaterName(user.email || ''); 
-                setSelectedNewStatus(null); // Reset selection
+                setSelectedNewStatus(null); 
                 setShowStatusModal(true);
             };
 
@@ -332,7 +331,6 @@
                                 await batch.commit();
                                 setImportProgress(Math.min(100, Math.round(((i + chunk.length) / total) * 100)));
                             }
-
                             alert("System Reset Complete. All cloud records have been wiped.");
                             setImportProgress(null);
                         } catch (err) { alert("Reset failed. Please check your connection."); setImportProgress(null); }
@@ -345,7 +343,6 @@
                 await window.fs.setDoc(settingDoc, { [type]: newList }, { merge: true });
             };
 
-            // --- BULK IMPORT ---
             const handleBulkImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -361,7 +358,6 @@
                         
                         setImportProgress(0);
 
-                        // Harvest Metadata
                         const settingsSnap = await window.fs.getDoc(window.fs.doc(window.db, "settings", "global"));
                         const currentSettings = settingsSnap.exists() ? settingsSnap.data() : {};
                         const currentBanks = new Set(currentSettings.banks || bankList);
@@ -389,7 +385,6 @@
                         await window.fs.setDoc(window.fs.doc(window.db, "settings", "global"), { banks: updatedBanks, statuses: updatedStatuses, headings: updatedHeadings }, { merge: true });
                         setBankList(updatedBanks); setStatusList(updatedStatuses); setCustomHeadings(updatedHeadings);
 
-                        // Batch Write
                         const chunkSize = 400; 
                         for (let i = 0; i < total; i += chunkSize) {
                             const chunk = dataRows.slice(i, i + chunkSize);
@@ -423,7 +418,6 @@
                 reader.readAsBinaryString(file);
             };
 
-            // --- REPORTS ---
             const generateSpecificReport = (type) => {
                 const { bank, status, startDate, endDate } = reportFilters;
                 const targetData = cases.filter(c => {
@@ -467,27 +461,6 @@
                     const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Received"]];
                     const body = targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]);
                     doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
-
-                    if (status.includes('Delivered')) {
-                        let finalY = doc.lastAutoTable.finalY || 40;
-                        if (finalY > 150) { 
-                            doc.addPage();
-                            finalY = 20;
-                        }
-                        const y = finalY + 30;
-                        doc.setFontSize(10);
-                        doc.setFont("helvetica", "bold");
-                        
-                        doc.text("Prepared By:", 30, y);
-                        doc.text("__________________", 30, y + 10);
-                        
-                        doc.text("Received By:", 125, y);
-                        doc.text("__________________", 125, y + 10);
-                        
-                        doc.text("Delivered By:", 220, y);
-                        doc.text("__________________", 220, y + 10);
-                    }
-
                     doc.save("Report.pdf");
                 }
                 setShowReportModal(false);
@@ -532,14 +505,54 @@
                     if (videoRef.current) videoRef.current.srcObject = stream; 
                 } catch (err) { alert("Unable to access camera."); setIsCameraActive(false); } 
             };
+
+            // IMPROVED SNAP FUNCTION (COMPRESSES IMAGE & SCANS)
             const snap = () => { 
                 const canvas = canvasRef.current; 
-                const video = videoRef.current; 
-                canvas.width = video.videoWidth; canvas.height = video.videoHeight; 
-                canvas.getContext('2d').drawImage(video, 0, 0); 
-                setFormData({ ...formData, photo: canvas.toDataURL('image/jpeg', 0.5) }); 
-                video.srcObject.getTracks().forEach(t => t.stop()); setIsCameraActive(false); 
+                const video = videoRef.current;
+                
+                // Memory Fix: Resize image to max 800px width
+                const scale = 800 / video.videoWidth;
+                const width = 800;
+                const height = video.videoHeight * scale;
+
+                canvas.width = width; 
+                canvas.height = height; 
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, width, height); 
+                
+                // Compression: Quality 0.6
+                const compressedImage = canvas.toDataURL('image/jpeg', 0.6);
+                
+                setFormData({ ...formData, photo: compressedImage }); 
+                video.srcObject.getTracks().forEach(t => t.stop()); 
+                setIsCameraActive(false);
+
+                // Auto-Scan Document
+                performOCR(compressedImage);
             };
+
+            const performOCR = (image) => {
+                if(!window.Tesseract) return;
+                setIsScanning(true);
+                setScanStatus('Reading Cheque/Document...');
+                
+                Tesseract.recognize(
+                    image,
+                    'eng',
+                    { logger: m => setScanStatus(`Scanning: ${Math.round(m.progress * 100)}%`) }
+                ).then(({ data: { text } }) => {
+                    const cleanedText = text.replace(/\n/g, " ").trim();
+                    setFormData(prev => ({ ...prev, remark: (prev.remark + " [SCANNED: " + cleanedText + "]").trim() }));
+                    setScanStatus('');
+                    setIsScanning(false);
+                }).catch(err => {
+                    console.error(err);
+                    setScanStatus('Scan failed');
+                    setTimeout(() => setIsScanning(false), 2000);
+                });
+            };
+
             const toggleReportStatus = (s) => {
                 const current = [...reportFilters.status];
                 const idx = current.indexOf(s);
@@ -674,7 +687,6 @@
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
                                             {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (<DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />))}
-                                            {/* NEW: DISPLAY WHO UPDATED LAST */}
                                             {selectedCase.lastUpdatedBy && (
                                                  <DetailCard label="Last Updated By" value={selectedCase.lastUpdatedBy} icon="user-check" />
                                             )}
@@ -761,28 +773,33 @@
                                     )}
                                     <div className="border-t pt-4">
                                         {!isCameraActive ? (
-                                            <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all">
-                                                {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl mb-2"/> : <Icon name="camera" size={24} />}
-                                                <span className="text-[10px] font-black uppercase tracking-widest">{formData.photo ? 'Retake Photo' : 'Capture Image Attachment'}</span>
+                                            <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all relative overflow-hidden">
+                                                {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl mb-2"/> : <Icon name="scan" size={24} />}
+                                                <span className="text-[10px] font-black uppercase tracking-widest">{formData.photo ? 'Retake Photo' : 'Scan Cheque / Document'}</span>
+                                                {isScanning && <div className="absolute inset-0 bg-blue-50/90 flex flex-col items-center justify-center animate-in fade-in"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div><span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{scanStatus}</span></div>}
                                             </button>
                                         ) : (
                                             <div className="space-y-4">
-                                                <video ref={videoRef} autoPlay playsInline className="w-full rounded-3xl bg-black aspect-video object-cover shadow-2xl" />
+                                                <div className="relative rounded-3xl overflow-hidden shadow-2xl">
+                                                    <video ref={videoRef} autoPlay playsInline className="w-full bg-black aspect-video object-cover" />
+                                                    <div className="scan-line"></div>
+                                                    <div className="absolute inset-0 border-2 border-white/50 m-8 rounded-xl pointer-events-none"></div>
+                                                    <div className="absolute top-4 left-0 w-full text-center text-white/80 text-[10px] font-black uppercase tracking-widest shadow-sm">Align Document Here</div>
+                                                </div>
                                                 <canvas ref={canvasRef} className="hidden" />
                                                 <div className="flex gap-2">
-                                                    <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Capture</button>
+                                                    <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Scan & Capture</button>
                                                     <button type="button" onClick={() => { setIsCameraActive(false); if(videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); }} className="px-8 bg-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500">Cancel</button>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all">Save Changes</button>
+                                    <button type="submit" disabled={isScanning} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all disabled:bg-slate-300">Save Changes</button>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* NEW STATUS SELECTION MODAL (TWO STEP PROCESS) */}
                     {showStatusModal && statusTarget && (
                         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in duration-200">
@@ -795,7 +812,6 @@
                                 </div>
                                 
                                 {!selectedNewStatus ? (
-                                    /* STEP 1: SELECT STATUS */
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Step 1: Select New Status</p>
                                         {statusList.map(st => (
@@ -810,13 +826,11 @@
                                         ))}
                                     </div>
                                 ) : (
-                                    /* STEP 2: CONFIRM WHO IS CHANGING IT */
                                     <div className="space-y-6 animate-in slide-in-from-right duration-300">
                                         <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                                             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Changing To</p>
                                             <h2 className="text-xl font-black text-blue-900 uppercase">{selectedNewStatus}</h2>
                                         </div>
-
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Who is changing this status?</label>
                                             <input 
@@ -828,7 +842,6 @@
                                                 autoFocus
                                             />
                                         </div>
-
                                         <div className="flex gap-2">
                                             <button 
                                                 onClick={confirmStatusUpdate}
