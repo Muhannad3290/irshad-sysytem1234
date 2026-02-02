@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0f172a">
     
-    <title>IRSHAD SYSTEM | Registry v7.1</title>
+    <title>IRSHAD SYSTEM | Registry v7.1 Mobile</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -19,18 +19,21 @@
         body { 
             font-family: 'Inter', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
-            /* Prevents bounce/rubber-band effect on mobile */
             overscroll-behavior-y: none; 
             background-color: #F8FAFC;
         }
+
+        /* Stop iOS input zooming */
+        input, select, textarea { font-size: 16px !important; }
+        @media (min-width: 768px) { input, select, textarea { font-size: 14px !important; } }
 
         /* Hide scrollbar but keep functionality */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* Smooth Table Scrolling */
-        .table-container::-webkit-scrollbar { height: 6px; }
-        .table-container::-webkit-scrollbar-track { background: #f1f5f9; }
+        .table-container::-webkit-scrollbar { height: 4px; }
+        .table-container::-webkit-scrollbar-track { background: transparent; }
         .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
         .animate-in { animation: fadeIn 0.3s ease-out; }
@@ -50,9 +53,10 @@
         }
         @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
 
-        /* Safe Area Utilities for iPhone Notches */
+        /* Safe Area Utilities */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .pt-safe { padding-top: env(safe-area-inset-top); }
+        .top-safe { top: env(safe-area-inset-top); }
     </style>
 
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -73,6 +77,7 @@
         import { getFirestore, collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, onSnapshot, setDoc, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+        // WARNING: Ensure you restrict these keys in your Firebase Console to your domain only.
         const firebaseConfig = {
             apiKey: "AIzaSyB0RmXR2hpyvS2ANEdAGjYGVFadumrMGV8",
             authDomain: "irshad-main-a2b8e.firebaseapp.com",
@@ -94,7 +99,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // [SYSTEM FIELDS CONSTANT REMAINS THE SAME]
         const SYSTEM_FIELDS = [
             { key: 'serialNo', label: 'Serial No' },
             { key: 'reference', label: 'Reference' },
@@ -131,10 +135,9 @@
 
         const StatusBadge = React.memo(({ status }) => { 
             const colors = { 'Pending': 'bg-amber-50 text-amber-600 border-amber-100', 'Delivered': 'bg-emerald-50 text-emerald-600 border-emerald-100', 'Under Process': 'bg-blue-50 text-blue-600 border-blue-100' }; 
-            return (<span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border flex items-center gap-2 ${colors[status] || 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${status === 'Delivered' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : status === 'Pending' ? 'bg-amber-500' : 'bg-blue-500 animate-pulse'}`}></div>{status}</span>); 
+            return (<span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border flex items-center gap-2 whitespace-nowrap ${colors[status] || 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${status === 'Delivered' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : status === 'Pending' ? 'bg-amber-500' : 'bg-blue-500 animate-pulse'}`}></div>{status}</span>); 
         });
 
-        // [LOGIN COMPONENT REMAINS THE SAME]
         const LoginScreen = () => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -154,7 +157,7 @@
 
             return (
                 <div className="min-h-screen login-wrapper flex items-center justify-center p-6">
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 text-center animate-in zoom-in duration-500">
+                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 md:p-10 text-center animate-in zoom-in duration-500">
                         <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg rotate-3">
                             <Icon name="shield-check" size={40} />
                         </div>
@@ -195,10 +198,15 @@
             const [customHeadings, setCustomHeadings] = useState([]);
             const [currentView, setCurrentView] = useState('dashboard');
             const [selectedCase, setSelectedCase] = useState(null);
+            
+            // Modals
             const [showModal, setShowModal] = useState(false);
             const [showSettings, setShowSettings] = useState(false);
             const [showReportModal, setShowReportModal] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
+            const [showStatusModal, setShowStatusModal] = useState(false);
+            
+            // UI States
             const [importProgress, setImportProgress] = useState(null);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [reportFilters, setReportFilters] = useState({ bank: '', status: [], startDate: '', endDate: '' });
@@ -208,15 +216,17 @@
             const [endDate, setEndDate] = useState('');
             const [visibleCount, setVisibleCount] = useState(20);
 
-            // STATE FOR STATUS MODAL
-            const [showStatusModal, setShowStatusModal] = useState(false);
+            // Status Update Logic
             const [statusTarget, setStatusTarget] = useState(null);
             const [updaterName, setUpdaterName] = useState(''); 
             const [selectedNewStatus, setSelectedNewStatus] = useState(null);
 
-            // STATE FOR OCR & SCANNING
+            // Camera & OCR
             const [isScanning, setIsScanning] = useState(false);
             const [scanStatus, setScanStatus] = useState('');
+            const [isCameraActive, setIsCameraActive] = useState(false);
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
 
             const emptyForm = {
                 serialNo: '', reference: '', institution: '', caseType: 'Sale', remark: '',
@@ -227,11 +237,7 @@
             };
             const [formData, setFormData] = useState(emptyForm);
 
-            const [isCameraActive, setIsCameraActive] = useState(false);
-            const videoRef = useRef(null);
-            const canvasRef = useRef(null);
-
-            // [FIREBASE USE EFFECTS REMAIN THE SAME]
+            // --- FIREBASE SYNC ---
             useEffect(() => {
                 if (window.auth) setFirebaseReady(true);
                 else window.addEventListener('firebase-ready', () => setFirebaseReady(true));
@@ -250,7 +256,7 @@
                 const qCases = window.fs.query(window.fs.collection(window.db, "cases"), window.fs.orderBy("timestamp", "desc"));
                 const unsubCases = window.fs.onSnapshot(qCases, 
                     (snap) => setCases(snap.docs.map(doc => ({ ...doc.data(), id: doc.id }))),
-                    (err) => { if (err.message.includes("index")) alert("INDEX MISSING: Check Console (F12) for link."); }
+                    (err) => { console.error("Snapshot Error:", err); }
                 );
 
                 const qTrash = window.fs.query(window.fs.collection(window.db, "trash"), window.fs.orderBy("timestamp", "desc"));
@@ -267,8 +273,7 @@
                 return () => { unsubCases(); unsubTrash(); unsubSettings(); };
             }, [user, firebaseReady]);
 
-            // [ALL FEATURE FUNCTIONS (confirmStatusUpdate, handleSave, etc.) REMAIN THE SAME]
-            // ... (Included implicitly to save space, but full logic from previous code is here)
+            // --- LOGIC FUNCTIONS ---
             const confirmStatusUpdate = async () => {
                 if (!statusTarget || !selectedNewStatus) return;
                 if (!updaterName.trim()) return alert("Please enter who is performing this update."); 
@@ -318,6 +323,7 @@
             const softDelete = async (id) => {
                 if(confirm("Move this record to Recycle Bin?")) {
                     const item = cases.find(c => c.id === id);
+                    if(!item) return;
                     const { id: oldId, ...data } = item;
                     await window.fs.addDoc(window.fs.collection(window.db, "trash"), { ...data, deletedAt: new Date().toLocaleString() });
                     await window.fs.deleteDoc(window.fs.doc(window.db, "cases", id));
@@ -518,7 +524,7 @@
             }, [cases, search, startDate, endDate]);
 
             // --- UI HELPERS ---
-            const openNewEntry = () => { setIsEditing(false); setFormData(emptyForm); setShowModal(true); };
+            const openNewEntry = () => { setIsEditing(false); setFormData(emptyForm); setShowModal(true); setIsMobileMenuOpen(false); };
             const openModify = (c) => { setIsEditing(true); setFormData(c); setShowModal(true); };
             const closeModal = () => { 
                 setShowModal(false); setIsEditing(false); setIsCameraActive(false); 
@@ -532,41 +538,31 @@
                 } catch (err) { alert("Unable to access camera."); setIsCameraActive(false); } 
             };
 
-            // IMPROVED SNAP FUNCTION (COMPRESSES IMAGE & SCANS)
             const snap = () => { 
                 const canvas = canvasRef.current; 
                 const video = videoRef.current;
-                
-                // Memory Fix: Resize image to max 800px width
                 const scale = 800 / video.videoWidth;
                 const width = 800;
                 const height = video.videoHeight * scale;
-
                 canvas.width = width; 
                 canvas.height = height; 
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, width, height); 
-                
-                // Compression: Quality 0.6
                 const compressedImage = canvas.toDataURL('image/jpeg', 0.6);
-                
                 setFormData({ ...formData, photo: compressedImage }); 
                 video.srcObject.getTracks().forEach(t => t.stop()); 
                 setIsCameraActive(false);
-
-                // Auto-Scan Document
                 performOCR(compressedImage);
             };
 
             const performOCR = (image) => {
                 if(!window.Tesseract) return;
                 setIsScanning(true);
-                setScanStatus('Reading Cheque/Document...');
-                
+                setScanStatus('Reading...');
                 Tesseract.recognize(
                     image,
                     'eng',
-                    { logger: m => setScanStatus(`Scanning: ${Math.round(m.progress * 100)}%`) }
+                    { logger: m => setScanStatus(`${Math.round(m.progress * 100)}%`) }
                 ).then(({ data: { text } }) => {
                     const cleanedText = text.replace(/\n/g, " ").trim();
                     setFormData(prev => ({ ...prev, remark: (prev.remark + " [SCANNED: " + cleanedText + "]").trim() }));
@@ -574,7 +570,7 @@
                     setIsScanning(false);
                 }).catch(err => {
                     console.error(err);
-                    setScanStatus('Scan failed');
+                    setScanStatus('Failed');
                     setTimeout(() => setIsScanning(false), 2000);
                 });
             };
@@ -586,18 +582,19 @@
                 setReportFilters({...reportFilters, status: current});
             };
 
-            if (!firebaseReady) return <div className="h-screen flex items-center justify-center font-black text-slate-300 bg-slate-900 tracking-widest animate-pulse uppercase">SYSTEM INITIALIZING...</div>;
+            if (!firebaseReady) return <div className="h-screen flex items-center justify-center font-black text-slate-300 bg-slate-900 tracking-widest animate-pulse uppercase">INITIALIZING...</div>;
             if (!user) return <LoginScreen />;
 
             return (
-                <div className="min-h-screen flex flex-col md:flex-row relative">
+                <div className="min-h-screen flex flex-col md:flex-row relative bg-[#F8FAFC]">
                     
-                    {/* MOBILE MENU BACKDROP (New addition for better mobile feel) */}
+                    {/* MOBILE BACKDROP */}
                     {isMobileMenuOpen && (
-                        <div className="fixed inset-0 bg-slate-900/50 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
+                        <div className="fixed inset-0 bg-slate-900/50 z-[45] md:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)}></div>
                     )}
 
-                    <aside className={`no-print w-72 bg-white border-r flex-col p-6 h-screen z-50 transition-transform duration-300 md:translate-x-0 fixed md:sticky top-0 left-0 pt-safe ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:flex'}`}>
+                    {/* SIDEBAR NAVIGATION */}
+                    <aside className={`no-print w-72 bg-white border-r flex-col p-6 h-screen z-[50] transition-transform duration-300 ease-in-out md:translate-x-0 fixed md:sticky top-0 left-0 pt-safe ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:flex'}`}>
                         <div className="flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800"><div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>IRSHAD <span className="text-blue-600">SYSTEM</span></div>
                         <div className="space-y-1 overflow-y-auto no-scrollbar max-h-[50vh]">
                             <SidebarLink active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setVisibleCount(20); setIsMobileMenuOpen(false);}} icon="layout" label="Dashboard" />
@@ -620,12 +617,13 @@
                         </div>
                     </aside>
 
-                    <div className="md:hidden bg-white p-4 border-b flex justify-between items-center sticky top-0 z-40 shadow-sm no-print pt-safe">
-                        <div className="font-black text-lg text-slate-800">IRSHAD SYSTEM</div>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2"><Icon name={isMobileMenuOpen ? "x" : "menu"} size={24} /></button>
+                    {/* MOBILE HEADER */}
+                    <div className="md:hidden bg-white/90 backdrop-blur-md p-4 border-b flex justify-between items-center sticky top-0 z-40 shadow-sm no-print pt-safe">
+                        <div className="font-black text-lg text-slate-800 flex items-center gap-2"><Icon name="cpu" size={20} className="text-blue-600"/> IRSHAD</div>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-50 rounded-xl text-slate-600"><Icon name={isMobileMenuOpen ? "x" : "menu"} size={24} /></button>
                     </div>
 
-                    <main className="flex-1 p-4 md:p-10 pb-24 overflow-x-hidden pt-safe">
+                    <main className="flex-1 p-4 md:p-10 pb-32 overflow-x-hidden pt-4 md:pt-10">
                         {currentView === 'dashboard' && (
                             <div className="space-y-6 animate-in fade-in duration-500">
                                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm w-full md:max-w-xs">
@@ -640,12 +638,12 @@
                                         </table>
                                     </div>
                                 </div>
-                                <div className="bg-white rounded-[2.5rem] p-4 md:p-10 border shadow-md">
+                                <div className="bg-white rounded-[2rem] p-4 md:p-10 border shadow-md">
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                                            <div><h2 className="font-black text-slate-800 text-2xl uppercase tracking-tighter">Recent Activities</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Live Updates from Cloud Storage</p></div>
-                                            <button onClick={() => setCurrentView('list')} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-2">Explore Full Vault <Icon name="chevron-right" size={14}/></button>
+                                            <div><h2 className="font-black text-slate-800 text-2xl uppercase tracking-tighter">Recent</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Live Updates</p></div>
+                                            <button onClick={() => setCurrentView('list')} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-2">View All <Icon name="chevron-right" size={14}/></button>
                                     </div>
-                                    <div className="table-container overflow-x-auto -mx-4 md:mx-0">
+                                    <div className="table-container overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
                                             <table className="w-full text-left min-w-[900px] border-separate border-spacing-0">
                                                 <thead>
                                                     <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
@@ -687,10 +685,10 @@
                                 </div>
                                 <div className="grid gap-4">
                                     {filteredData.slice(0, visibleCount).map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
+                                        <div key={c.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
                                             <div className="flex items-center gap-5 w-full">
                                                 <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0">#{c.serialNo}</div>
-                                                <div className="overflow-hidden"><h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3><p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p></div>
+                                                <div className="overflow-hidden w-full"><h3 className="font-bold text-slate-800 truncate text-sm">{c.institution} ({c.reference})</h3><p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p></div>
                                             </div>
                                             <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                                                 <button onClick={() => openStatusModal(c)} className="status-btn"><StatusBadge status={c.status} /></button>
@@ -700,7 +698,7 @@
                                         </div>
                                     ))}
                                 </div>
-                                {filteredData.length > visibleCount && (<button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-xs hover:bg-slate-50 transition-all tracking-widest shadow-sm">Load More Records ({filteredData.length - visibleCount} Remaining)</button>)}
+                                {filteredData.length > visibleCount && (<button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-xs hover:bg-slate-50 transition-all tracking-widest shadow-sm">Load More ({filteredData.length - visibleCount})</button>)}
                             </div>
                         )}
 
@@ -713,18 +711,17 @@
                                         <button onClick={() => softDelete(selectedCase.id)} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all shadow-sm"><div className="inline mr-1"><Icon name="trash-2" size={12} /></div> Delete</button>
                                     </div>
                                 </div>
-                                <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border">
-                                    <div className="bg-slate-900 p-8 text-white flex justify-between items-center"><div><h2 className="text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div><button onClick={() => openStatusModal(selectedCase)} className="status-btn"><StatusBadge status={selectedCase.status} /></button></div>
-                                    <div className="p-8 bg-[#F8FAFC]">
+                                <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl border">
+                                    <div className="bg-slate-900 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                        <div><h2 className="text-2xl md:text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div>
+                                        <button onClick={() => openStatusModal(selectedCase)} className="status-btn"><StatusBadge status={selectedCase.status} /></button>
+                                    </div>
+                                    <div className="p-6 md:p-8 bg-[#F8FAFC]">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
                                             {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (<DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />))}
-                                            {selectedCase.lastUpdatedBy && (
-                                                 <DetailCard label="Last Updated By" value={selectedCase.lastUpdatedBy} icon="user-check" />
-                                            )}
-                                            {selectedCase.statusTimestamp && (
-                                                 <DetailCard label="Last Update Time" value={selectedCase.statusTimestamp} icon="clock" />
-                                            )}
+                                            {selectedCase.lastUpdatedBy && (<DetailCard label="Last Updated By" value={selectedCase.lastUpdatedBy} icon="user-check" />)}
+                                            {selectedCase.statusTimestamp && (<DetailCard label="Last Update Time" value={selectedCase.statusTimestamp} icon="clock" />)}
                                         </div>
                                         {selectedCase.photo && <div className="mt-8"><p className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">Attachment</p><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>}
                                     </div>
@@ -737,14 +734,14 @@
                                 <div className="bg-white p-6 rounded-[2rem] border flex justify-between items-center"><div><h2 className="text-xl font-black uppercase tracking-tight">Recycle Bin</h2><p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Recently Deleted</p></div></div>
                                 <div className="grid gap-4">
                                     {trash.map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border flex items-center justify-between opacity-75 hover:opacity-100 transition-all shadow-sm">
-                                            <div className="flex items-center gap-5">
+                                        <div key={c.id} className="bg-white p-6 rounded-[2rem] border flex flex-col md:flex-row items-center justify-between gap-4 opacity-75 hover:opacity-100 transition-all shadow-sm">
+                                            <div className="flex items-center gap-5 w-full">
                                                 <div className="w-12 h-12 bg-red-50 text-red-400 rounded-xl flex items-center justify-center font-black text-xs">DEL</div>
-                                                <div><h3 className="font-bold">{c.institution} (#{c.serialNo})</h3><p className="text-[10px] text-slate-400">Deleted: {c.deletedAt}</p></div>
+                                                <div><h3 className="font-bold text-sm">{c.institution} (#{c.serialNo})</h3><p className="text-[10px] text-slate-400">Deleted: {c.deletedAt}</p></div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => restoreItem(c.id)} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-100 transition-all shadow-sm"><div className="inline mr-1"><Icon name="rotate-ccw" size={12} /></div> Restore</button>
-                                                <button onClick={() => permanentDelete(c.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all shadow-sm">Forever</button>
+                                            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                                                <button onClick={() => restoreItem(c.id)} className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-100 transition-all shadow-sm"><div className="inline mr-1"><Icon name="rotate-ccw" size={12} /></div> Restore</button>
+                                                <button onClick={() => permanentDelete(c.id)} className="px-4 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all shadow-sm">Forever</button>
                                             </div>
                                         </div>
                                     ))}
@@ -754,80 +751,87 @@
                     </main>
 
                     {showModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto no-scrollbar">
-                                <div className="p-8 border-b flex justify-between items-center sticky top-0 bg-white z-10 shadow-sm"><h3 className="font-black text-slate-800 text-xl uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3><button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full transition-all"><Icon name="x" className="text-slate-400"/></button></div>
-                                <form onSubmit={handleSave} className="p-8 space-y-6">
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Case Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
-                                            <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
-                                            <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
-                                            <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
-                                            <Input label="Remark" value={formData.remark} onChange={v => setFormData({...formData, remark: v})} />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Buyer Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
-                                            <Input label="ID Number" value={formData.buyerId} onChange={v => setFormData({...formData, buyerId: v})} />
-                                            <Input label="Email" type="email" value={formData.buyerEmail} onChange={v => setFormData({...formData, buyerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.buyerPhone} onChange={v => setFormData({...formData, buyerPhone: v})} />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Seller Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
-                                            <Input label="ID Number" value={formData.sellerId} onChange={v => setFormData({...formData, sellerId: v})} />
-                                            <Input label="Email" type="email" value={formData.sellerEmail} onChange={v => setFormData({...formData, sellerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.sellerPhone} onChange={v => setFormData({...formData, sellerPhone: v})} />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Processing Details</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
-                                            <Input label="Processor Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
-                                            <Input label="Date Received" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
-                                            <Input label="Date Handover" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
-                                        </div>
-                                    </div>
-                                    {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).length > 0 && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md pb-safe pt-safe">
+                            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                                <div className="p-6 border-b flex justify-between items-center bg-white z-10 shadow-sm shrink-0">
+                                    <h3 className="font-black text-slate-800 text-lg uppercase tracking-tighter">{isEditing ? 'Modify Entry' : 'New Entry'}</h3>
+                                    <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full transition-all"><Icon name="x" className="text-slate-400"/></button>
+                                </div>
+                                <div className="overflow-y-auto p-6 space-y-6 overscroll-contain">
+                                    <form id="entryForm" onSubmit={handleSave} className="space-y-6">
                                         <div className="space-y-4">
-                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Extra Fields (Imported)</h4>
-                                            <div className="grid grid-cols-1 gap-4">
-                                                {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).map(h => (<Input key={h} label={h} value={formData.customData?.[h] || ''} onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} />))}
+                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Case Information</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
+                                                <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
+                                                <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
+                                                <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
+                                                <Input label="Remark" value={formData.remark} onChange={v => setFormData({...formData, remark: v})} />
                                             </div>
                                         </div>
-                                    )}
-                                    <div className="border-t pt-4">
-                                        {!isCameraActive ? (
-                                            <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all relative overflow-hidden">
-                                                {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl mb-2"/> : <Icon name="scan" size={24} />}
-                                                <span className="text-[10px] font-black uppercase tracking-widest">{formData.photo ? 'Retake Photo' : 'Scan Cheque / Document'}</span>
-                                                {isScanning && <div className="absolute inset-0 bg-blue-50/90 flex flex-col items-center justify-center animate-in fade-in"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div><span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{scanStatus}</span></div>}
-                                            </button>
-                                        ) : (
+                                        <div className="space-y-4">
+                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Buyer Details</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input label="Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
+                                                <Input label="ID Number" value={formData.buyerId} onChange={v => setFormData({...formData, buyerId: v})} />
+                                                <Input label="Email" type="email" value={formData.buyerEmail} onChange={v => setFormData({...formData, buyerEmail: v})} />
+                                                <Input label="Phone" type="tel" value={formData.buyerPhone} onChange={v => setFormData({...formData, buyerPhone: v})} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Seller Details</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input label="Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
+                                                <Input label="ID Number" value={formData.sellerId} onChange={v => setFormData({...formData, sellerId: v})} />
+                                                <Input label="Email" type="email" value={formData.sellerEmail} onChange={v => setFormData({...formData, sellerEmail: v})} />
+                                                <Input label="Phone" type="tel" value={formData.sellerPhone} onChange={v => setFormData({...formData, sellerPhone: v})} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Processing Details</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
+                                                <Input label="Processor Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
+                                                <Input label="Date Received" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
+                                                <Input label="Date Handover" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
+                                            </div>
+                                        </div>
+                                        {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).length > 0 && (
                                             <div className="space-y-4">
-                                                <div className="relative rounded-3xl overflow-hidden shadow-2xl">
-                                                    <video ref={videoRef} autoPlay playsInline className="w-full bg-black aspect-[3/4] object-cover" />
-                                                    <div className="scan-line"></div>
-                                                    <div className="absolute inset-0 border-2 border-white/50 m-8 rounded-xl pointer-events-none"></div>
-                                                    <div className="absolute top-4 left-0 w-full text-center text-white/80 text-[10px] font-black uppercase tracking-widest shadow-sm">Align Document Here</div>
-                                                </div>
-                                                <canvas ref={canvasRef} className="hidden" />
-                                                <div className="flex gap-2">
-                                                    <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Scan & Capture</button>
-                                                    <button type="button" onClick={() => { setIsCameraActive(false); if(videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); }} className="px-8 bg-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500">Cancel</button>
+                                                <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Extra Fields (Imported)</h4>
+                                                <div className="grid grid-cols-1 gap-4">
+                                                    {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).map(h => (<Input key={h} label={h} value={formData.customData?.[h] || ''} onChange={v => setFormData({...formData, customData: {...formData.customData, [h]: v}})} />))}
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
-                                    <button type="submit" disabled={isScanning} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all disabled:bg-slate-300">Save Changes</button>
-                                </form>
+                                        <div className="border-t pt-4">
+                                            {!isCameraActive ? (
+                                                <button type="button" onClick={openCamera} className="w-full py-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center gap-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/20 transition-all relative overflow-hidden">
+                                                    {formData.photo ? <img src={formData.photo} className="h-16 rounded-xl mb-2"/> : <Icon name="scan" size={24} />}
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">{formData.photo ? 'Retake Photo' : 'Scan Cheque / Document'}</span>
+                                                    {isScanning && <div className="absolute inset-0 bg-blue-50/90 flex flex-col items-center justify-center animate-in fade-in"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div><span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{scanStatus}</span></div>}
+                                                </button>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    <div className="relative rounded-3xl overflow-hidden shadow-2xl">
+                                                        <video ref={videoRef} autoPlay playsInline className="w-full bg-black aspect-[3/4] object-cover" />
+                                                        <div className="scan-line"></div>
+                                                        <div className="absolute inset-0 border-2 border-white/50 m-8 rounded-xl pointer-events-none"></div>
+                                                        <div className="absolute top-4 left-0 w-full text-center text-white/80 text-[10px] font-black uppercase tracking-widest shadow-sm">Align Document Here</div>
+                                                    </div>
+                                                    <canvas ref={canvasRef} className="hidden" />
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={snap} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Scan & Capture</button>
+                                                        <button type="button" onClick={() => { setIsCameraActive(false); if(videoRef.current.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); }} className="px-8 bg-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </form>
+                                </div>
+                                <div className="p-6 border-t bg-white shrink-0 pb-safe">
+                                    <button type="submit" form="entryForm" disabled={isScanning} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:bg-blue-700 transition-all disabled:bg-slate-300">Save Record</button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -838,7 +842,7 @@
                                 <div className="flex justify-between items-center mb-6">
                                     <div>
                                         <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight">Update Status</h3>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">For Case #{statusTarget.serialNo}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Case #{statusTarget.serialNo}</p>
                                     </div>
                                     <button onClick={() => setShowStatusModal(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><Icon name="x" size={18}/></button>
                                 </div>
@@ -880,7 +884,7 @@
                                                 disabled={!updaterName.trim()}
                                                 className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black transition-all"
                                             >
-                                                Confirm Update
+                                                Confirm
                                             </button>
                                             <button 
                                                 onClick={() => setSelectedNewStatus(null)}
@@ -895,7 +899,6 @@
                         </div>
                     )}
 
-                    {/* [IMPORT AND REPORT MODALS REMAIN THE SAME BUT WITH Z-INDEX FIXES FOR MOBILE] */}
                     {importProgress !== null && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-lg">
                             <div className="bg-white w-full max-sm rounded-[2rem] p-8 text-center space-y-6 animate-in zoom-in duration-300">
