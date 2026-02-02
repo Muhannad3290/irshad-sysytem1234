@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v6.5 (Full Features)</title>
+    <title>IRSHAD SYSTEM | Registry v6.6 (Signatures Update)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -431,6 +431,28 @@
                     const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Received"]];
                     const body = targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]);
                     doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
+
+                    // --- SIGNATURE BLOCK LOGIC (ONLY IF DELIVERED IS SELECTED) ---
+                    if (status.includes('Delivered')) {
+                        let finalY = doc.lastAutoTable.finalY || 40;
+                        if (finalY > 150) { 
+                            doc.addPage();
+                            finalY = 20;
+                        }
+                        const y = finalY + 30;
+                        doc.setFontSize(10);
+                        doc.setFont("helvetica", "bold");
+                        
+                        doc.text("Prepared By:", 30, y);
+                        doc.text("__________________", 30, y + 10);
+                        
+                        doc.text("Received By:", 125, y);
+                        doc.text("__________________", 125, y + 10);
+                        
+                        doc.text("Delivered By:", 220, y);
+                        doc.text("__________________", 220, y + 10);
+                    }
+
                     doc.save("Report.pdf");
                 }
                 setShowReportModal(false);
