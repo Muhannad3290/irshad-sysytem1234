@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v6.6 (Signatures Update)</title>
+    <title>IRSHAD SYSTEM | Registry v7.0 (Two-Step Verification)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -177,6 +177,12 @@
             const [endDate, setEndDate] = useState('');
             const [visibleCount, setVisibleCount] = useState(20);
 
+            // NEW STATE FOR 2-STEP STATUS MODAL
+            const [showStatusModal, setShowStatusModal] = useState(false);
+            const [statusTarget, setStatusTarget] = useState(null);
+            const [updaterName, setUpdaterName] = useState(''); 
+            const [selectedNewStatus, setSelectedNewStatus] = useState(null); // Stores the status selected in step 1
+
             const emptyForm = {
                 serialNo: '', reference: '', institution: '', caseType: 'Sale', remark: '',
                 buyerName: '', buyerId: '', buyerEmail: '', buyerPhone: '',
@@ -230,13 +236,43 @@
 
             // --- FEATURES ---
 
-            const toggleStatus = async (caseId) => {
-                const caseItem = cases.find(c => c.id === caseId);
-                if (!caseItem) return;
-                const nextIdx = (statusList.indexOf(caseItem.status) + 1) % statusList.length;
-                const newStatus = statusList[nextIdx];
+            // CONFIRM UPDATE LOGIC (Step 2)
+            const confirmStatusUpdate = async () => {
+                if (!statusTarget || !selectedNewStatus) return;
+                if (!updaterName.trim()) return alert("Please enter who is performing this update."); 
+
                 const now = new Date().toLocaleString('en-GB');
-                await window.fs.updateDoc(window.fs.doc(window.db, "cases", caseId), { status: newStatus, statusTimestamp: now });
+                
+                try {
+                    await window.fs.updateDoc(window.fs.doc(window.db, "cases", statusTarget.id), { 
+                        status: selectedNewStatus, 
+                        statusTimestamp: now,
+                        lastUpdatedBy: updaterName // Saves the manually entered name
+                    });
+                    
+                    // Update local selection if in detail view
+                    if (selectedCase && selectedCase.id === statusTarget.id) {
+                        setSelectedCase({
+                            ...selectedCase,
+                            status: selectedNewStatus,
+                            statusTimestamp: now,
+                            lastUpdatedBy: updaterName
+                        });
+                    }
+
+                    setShowStatusModal(false);
+                    setStatusTarget(null);
+                    setSelectedNewStatus(null);
+                } catch (err) {
+                    alert("Error updating status: " + err.message);
+                }
+            };
+
+            const openStatusModal = (item) => {
+                setStatusTarget(item);
+                setUpdaterName(user.email || ''); 
+                setSelectedNewStatus(null); // Reset selection
+                setShowStatusModal(true);
             };
 
             const handleSave = async (e) => {
@@ -432,7 +468,6 @@
                     const body = targetData.map(c => [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, c.dateReceived]);
                     doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
 
-                    // --- SIGNATURE BLOCK LOGIC (ONLY IF DELIVERED IS SELECTED) ---
                     if (status.includes('Delivered')) {
                         let finalY = doc.lastAutoTable.finalY || 40;
                         if (finalY > 150) { 
@@ -584,7 +619,7 @@
                                                         <td className="py-6 pr-6 font-bold text-slate-500 text-xs">{c.reference || "-"}</td>
                                                         <td className="py-6 pr-6"><div className="flex flex-col"><span className="font-black text-slate-800 text-sm tracking-tight">{c.institution || "-"}</span><span className="text-[9px] font-black text-blue-500 uppercase mt-0.5">{c.caseType}</span></div></td>
                                                         <td className="py-6 pr-6"><div className="flex flex-col gap-1"><div className="flex items-center gap-2"><span className="w-10 text-[8px] font-black text-slate-300 uppercase">Buyer</span><span className="text-[11px] font-bold text-slate-700 uppercase truncate max-w-[140px]">{c.buyerName || "—"}</span></div><div className="flex items-center gap-2 border-t border-slate-50 pt-1"><span className="w-10 text-[8px] font-black text-slate-300 uppercase">Seller</span><span className="text-[11px] font-bold text-slate-600 uppercase truncate max-w-[140px]">{c.sellerName || "—"}</span></div></div></td>
-                                                        <td className="py-6 pr-6"><div className="flex flex-col"><button onClick={() => toggleStatus(c.id)} className="status-btn self-start"><StatusBadge status={c.status} /></button><span className="text-[8px] font-bold text-slate-400 mt-1.5 ml-1">{c.statusTimestamp || c.timestamp}</span></div></td>
+                                                        <td className="py-6 pr-6"><div className="flex flex-col"><button onClick={() => openStatusModal(c)} className="status-btn self-start"><StatusBadge status={c.status} /></button><span className="text-[8px] font-bold text-slate-400 mt-1.5 ml-1">{c.statusTimestamp || c.timestamp}</span></div></td>
                                                         <td className="py-6 text-right pr-4"><div className="flex items-center justify-end gap-1"><button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm rounded-xl transition-all"><Icon name="eye" size={16}/></button><button onClick={() => openModify(c)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-amber-500 hover:border-amber-200 hover:shadow-sm rounded-xl transition-all"><Icon name="edit-3" size={16}/></button><button onClick={() => softDelete(c.id)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-sm rounded-xl transition-all"><Icon name="trash-2" size={16}/></button></div></td>
                                                     </tr>
                                                 ))}
@@ -613,7 +648,7 @@
                                                 <div className="overflow-hidden"><h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3><p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p></div>
                                             </div>
                                             <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                                                <button onClick={() => toggleStatus(c.id)} className="status-btn"><StatusBadge status={c.status} /></button>
+                                                <button onClick={() => openStatusModal(c)} className="status-btn"><StatusBadge status={c.status} /></button>
                                                 <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
                                                 <button onClick={() => openModify(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-500 rounded-xl transition-all"><Icon name="edit-3" size={18} /></button>
                                             </div>
@@ -634,11 +669,18 @@
                                     </div>
                                 </div>
                                 <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border">
-                                    <div className="bg-slate-900 p-8 text-white flex justify-between items-center"><div><h2 className="text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div><button onClick={() => toggleStatus(selectedCase.id)} className="status-btn"><StatusBadge status={selectedCase.status} /></button></div>
+                                    <div className="bg-slate-900 p-8 text-white flex justify-between items-center"><div><h2 className="text-4xl font-black tracking-tighter mb-2">Case #{selectedCase.serialNo}</h2><p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{selectedCase.timestamp}</p></div><button onClick={() => openStatusModal(selectedCase)} className="status-btn"><StatusBadge status={selectedCase.status} /></button></div>
                                     <div className="p-8 bg-[#F8FAFC]">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {SYSTEM_FIELDS.map(f => <DetailCard key={f.key} label={f.label} value={selectedCase[f.key]} icon="info" />)}
                                             {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (<DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />))}
+                                            {/* NEW: DISPLAY WHO UPDATED LAST */}
+                                            {selectedCase.lastUpdatedBy && (
+                                                 <DetailCard label="Last Updated By" value={selectedCase.lastUpdatedBy} icon="user-check" />
+                                            )}
+                                            {selectedCase.statusTimestamp && (
+                                                 <DetailCard label="Last Update Time" value={selectedCase.statusTimestamp} icon="clock" />
+                                            )}
                                         </div>
                                         {selectedCase.photo && <div className="mt-8"><p className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">Attachment</p><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>}
                                     </div>
@@ -736,6 +778,74 @@
                                     </div>
                                     <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all">Save Changes</button>
                                 </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* NEW STATUS SELECTION MODAL (TWO STEP PROCESS) */}
+                    {showStatusModal && statusTarget && (
+                        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight">Update Status</h3>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">For Case #{statusTarget.serialNo}</p>
+                                    </div>
+                                    <button onClick={() => setShowStatusModal(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><Icon name="x" size={18}/></button>
+                                </div>
+                                
+                                {!selectedNewStatus ? (
+                                    /* STEP 1: SELECT STATUS */
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Step 1: Select New Status</p>
+                                        {statusList.map(st => (
+                                            <button 
+                                                key={st} 
+                                                onClick={() => setSelectedNewStatus(st)}
+                                                className={`w-full p-4 rounded-2xl border font-black text-xs uppercase flex items-center justify-between transition-all hover:bg-slate-50 hover:border-blue-300 ${statusTarget.status === st ? 'border-slate-800 bg-slate-50 opacity-50' : 'bg-white border-slate-100'}`}
+                                            >
+                                                <span>{st}</span>
+                                                {statusTarget.status === st && <Icon name="check-circle" size={16}/>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    /* STEP 2: CONFIRM WHO IS CHANGING IT */
+                                    <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Changing To</p>
+                                            <h2 className="text-xl font-black text-blue-900 uppercase">{selectedNewStatus}</h2>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Who is changing this status?</label>
+                                            <input 
+                                                type="text" 
+                                                value={updaterName} 
+                                                onChange={(e) => setUpdaterName(e.target.value)} 
+                                                className="w-full p-3 bg-slate-50 rounded-xl border font-bold text-sm text-slate-700 outline-none focus:border-blue-500 shadow-inner mt-1" 
+                                                placeholder="Enter Processor Name"
+                                                autoFocus
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={confirmStatusUpdate}
+                                                disabled={!updaterName.trim()}
+                                                className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black transition-all"
+                                            >
+                                                Confirm Update
+                                            </button>
+                                            <button 
+                                                onClick={() => setSelectedNewStatus(null)}
+                                                className="px-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs hover:bg-slate-200"
+                                            >
+                                                Back
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
