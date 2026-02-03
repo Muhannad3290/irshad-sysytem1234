@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v8.3 (Sort Fixed)</title>
+    <title>IRSHAD SYSTEM | Registry v8.4 (Final Master)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -215,20 +215,17 @@
             };
             const [formData, setFormData] = useState(emptyForm);
 
-            // HELPER: CORRECTLY PARSE DATE STRINGS FOR SORTING
+            // HELPER: PARSE DATES FOR CORRECT SORTING
             const parseDateHelper = (dStr) => {
                 if (!dStr) return 0;
-                // Try converting DD/MM/YYYY or similar to timestamp
-                // Assume DD/MM/YYYY hh:mm:ss format
                 const clean = dStr.split(',')[0].trim(); 
                 if (clean.includes('/')) {
                     const parts = clean.split('/');
-                    // Month is 0-indexed in JS Date
                     if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
                 } 
                 else if (clean.includes('-')) {
                     const parts = clean.split('-');
-                    if(parts[0].length === 4) return new Date(clean).getTime(); // YYYY-MM-DD
+                    if(parts[0].length === 4) return new Date(clean).getTime();
                     if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
                 }
                 return new Date(dStr).getTime() || 0;
@@ -249,15 +246,22 @@
             useEffect(() => {
                 if (!user || !firebaseReady) return;
                 
-                // We remove orderBy("timestamp", "desc") because string sorting is broken for DD/MM dates.
-                // We will sort manually in the snap callback.
                 const qCases = window.fs.query(window.fs.collection(window.db, "cases"));
-                
                 const unsubCases = window.fs.onSnapshot(qCases, 
                     (snap) => {
                         const rawData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                        // MANUAL SORT: Sort by timestamp DESC using correct date parsing
-                        rawData.sort((a, b) => parseDateHelper(b.timestamp) - parseDateHelper(a.timestamp));
+                        // SMART SORT: Uses the parsed date logic so "02/02/2026" comes AFTER "29/01/2026"
+                        rawData.sort((a, b) => {
+                            let dateA = a.timestamp;
+                            if (a.status === 'Pending' && a.dateReceived) dateA = a.dateReceived;
+                            else if (a.status === 'Delivered' && a.dateHandover) dateA = a.dateHandover;
+
+                            let dateB = b.timestamp;
+                            if (b.status === 'Pending' && b.dateReceived) dateB = b.dateReceived;
+                            else if (b.status === 'Delivered' && b.dateHandover) dateB = b.dateHandover;
+
+                            return parseDateHelper(dateB) - parseDateHelper(dateA);
+                        });
                         setCases(rawData);
                     },
                     (err) => { console.error("Snapshot Error:", err); }
@@ -307,7 +311,6 @@
                 e.preventDefault();
                 const now = new Date();
                 const timestamp = now.toLocaleString('en-GB');
-                
                 const day = String(now.getDate()).padStart(2, '0');
                 const month = String(now.getMonth() + 1).padStart(2, '0');
                 const year = now.getFullYear();
@@ -315,8 +318,7 @@
 
                 try {
                     let dataToSubmit = { ...formData };
-
-                    // Auto-fill dates if missing
+                    // Auto-fill dates on new entry if user left them blank
                     if (dataToSubmit.status === 'Pending' && !dataToSubmit.dateReceived) {
                         dataToSubmit.dateReceived = todayDate;
                     }
@@ -331,7 +333,7 @@
                         const { id, ...newEntry } = dataToSubmit; 
                         await window.fs.addDoc(window.fs.collection(window.db, "cases"), { 
                             ...newEntry, 
-                            timestamp, // System creation time
+                            timestamp, 
                             statusTimestamp: timestamp 
                         });
                     }
@@ -511,8 +513,8 @@
                     if (startDate || endDate) {
                         try {
                             let dateStrToCheck = c.timestamp; 
-                            if (status.includes('Pending')) dateStrToCheck = c.dateReceived;
-                            else if (status.includes('Delivered')) dateStrToCheck = c.dateHandover;
+                            if (c.status === 'Pending' && c.dateReceived) dateStrToCheck = c.dateReceived;
+                            else if (c.status === 'Delivered' && c.dateHandover) dateStrToCheck = c.dateHandover;
 
                             const caseDate = parseDate(dateStrToCheck);
                             if (caseDate && !isNaN(caseDate)) {
@@ -550,8 +552,9 @@
                     const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Date Ref"]];
                     const body = targetData.map(c => {
                         let displayDate = c.timestamp;
-                        if(status.includes('Pending')) displayDate = c.dateReceived;
-                        if(status.includes('Delivered')) displayDate = c.dateHandover;
+                        // REPORT LOGIC FIX: Check Row Status, Not Filter Status
+                        if(c.status === 'Pending') displayDate = c.dateReceived;
+                        else if(c.status === 'Delivered') displayDate = c.dateHandover;
                         return [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, displayDate || '-'];
                     });
                     doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
@@ -581,6 +584,20 @@
             };
 
             const filteredData = useMemo(() => {
+                const parseDate = (dStr) => {
+                    if (!dStr) return null;
+                    const clean = dStr.split(',')[0].trim();
+                    if (clean.includes('/')) {
+                        const parts = clean.split('/');
+                        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                    } else if (clean.includes('-')) {
+                        const parts = clean.split('-');
+                        if(parts[0].length === 4) return new Date(clean);
+                        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                    }
+                    return new Date(clean);
+                };
+
                 let data = cases.filter(c => {
                     const s = search.toLowerCase();
                     const matchesSearch = (c.institution || "").toLowerCase().includes(s) || (c.serialNo || "").toLowerCase().includes(s) || (c.reference || "").toLowerCase().includes(s) || (c.buyerName || "").toLowerCase().includes(s) || (c.sellerName || "").toLowerCase().includes(s);
@@ -592,7 +609,6 @@
                             else if (c.status === 'Delivered' && c.dateHandover) dateStrToCheck = c.dateHandover;
 
                             const caseDate = parseDateHelper(dateStrToCheck);
-                            // Parse helper returns ms timestamp, convert back to date for compare
                             const checkTime = new Date(caseDate).setHours(0,0,0,0);
                             
                             if (startDate) {
