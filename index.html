@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v7.3 Mobile Fixed</title>
+    <title>IRSHAD SYSTEM | Registry v7.4 (Original Vault)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -42,6 +42,9 @@
             animation: scan 2s linear infinite;
         }
         @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+
+        /* Prevent iOS Zoom on focus */
+        input, select, textarea { font-size: 16px !important; }
 
         @media print {
             .no-print { display: none !important; }
@@ -734,12 +737,12 @@
                                 </div>
                                 <div className="grid gap-4">
                                     {filteredData.slice(0, visibleCount).map(c => (
-                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
+                                        <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
                                             <div className="flex items-center gap-5 w-full">
                                                 <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0">#{c.serialNo}</div>
                                                 <div className="overflow-hidden w-full"><h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3><p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p></div>
                                             </div>
-                                            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 mt-2 md:mt-0">
+                                            <div className="flex items-center gap-2 w-auto justify-end">
                                                 <button onClick={() => openStatusModal(c)} className="status-btn"><StatusBadge status={c.status} /></button>
                                                 <div className="flex gap-2">
                                                     <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
