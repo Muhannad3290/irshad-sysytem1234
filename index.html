@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v7.2 Mobile</title>
+    <title>IRSHAD SYSTEM | Registry v7.3 Mobile Fixed</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -12,10 +12,13 @@
         body { 
             font-family: 'Inter', sans-serif; 
             background-color: #F8FAFC;
-            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+            -webkit-tap-highlight-color: transparent;
         }
-
-        /* Hide scrollbar but keep functionality */
+        
+        /* Sidebar Transitions */
+        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Hide scrollbar */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -30,7 +33,6 @@
         .status-btn:active { transform: scale(0.95); }
         .login-wrapper { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
 
-        /* Scanner Laser Line */
         .scan-line {
             position: absolute;
             width: 100%;
@@ -41,7 +43,6 @@
         }
         @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
 
-        /* Printing Adjustments */
         @media print {
             .no-print { display: none !important; }
             body { background: white; }
@@ -614,37 +615,42 @@
             return (
                 <div className="min-h-screen flex relative bg-[#F8FAFC]">
                     
-                    {/* MOBILE HEADER - Only shows on small screens */}
+                    {/* MOBILE HEADER */}
                     <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b z-[60] p-4 flex justify-between items-center shadow-sm">
                         <div className="font-black text-slate-800 flex items-center gap-2">
                             <div className="bg-blue-600 p-1.5 rounded-lg text-white"><Icon name="cpu" size={16} /></div>
                             IRSHAD SYSTEM
                         </div>
                         <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-100 rounded-lg text-slate-600">
-                            <Icon name={isSidebarOpen ? "x" : "menu"} size={24} />
+                            <Icon name="menu" size={24} />
                         </button>
                     </div>
 
-                    {/* SIDEBAR OVERLAY - Closes menu when clicking outside on mobile */}
+                    {/* SIDEBAR OVERLAY */}
                     {isSidebarOpen && (
                         <div 
-                            className="fixed inset-0 bg-slate-900/50 z-[40] md:hidden backdrop-blur-sm"
+                            className="fixed inset-0 bg-slate-900/50 z-[70] md:hidden backdrop-blur-sm"
                             onClick={() => setSidebarOpen(false)}
                         ></div>
                     )}
                     
-                    {/* SIDEBAR NAVIGATION - Responsive */}
+                    {/* SIDEBAR NAVIGATION - FIX APPLIED HERE */}
                     <aside className={`
                         no-print w-72 bg-white border-r flex flex-col p-6 h-screen 
-                        fixed md:sticky top-0 z-[50] transition-transform duration-300 ease-in-out
+                        fixed md:sticky top-0 z-[80] transition-transform duration-300 ease-in-out sidebar-transition
                         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-                        md:translate-x-0 md:top-0
-                        pt-20 md:pt-6 /* Add padding top on mobile to clear header */
+                        md:translate-x-0 md:top-0 shadow-2xl md:shadow-none
                     `}>
-                        <div className="hidden md:flex items-center gap-3 mb-10 px-2 font-black text-xl text-slate-800">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>
-                            IRSHAD <span className="text-blue-600">SYSTEM</span>
+                        {/* TITLE ROW - Visible on Mobile Sidebar now */}
+                        <div className="flex justify-between items-center mb-10 px-2">
+                            <div className="flex items-center gap-3 font-black text-xl text-slate-800">
+                                <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="cpu" /></div>
+                                <span>IRSHAD <span className="text-blue-600">SYSTEM</span></span>
+                            </div>
+                            {/* CLOSE BUTTON - Mobile Only */}
+                            <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-slate-400 hover:text-slate-600"><Icon name="x" size={20}/></button>
                         </div>
+
                         <div className="space-y-1 overflow-y-auto no-scrollbar max-h-[50vh]">
                             <SidebarLink active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setVisibleCount(20); setSidebarOpen(false);}} icon="layout" label="Dashboard" />
                             <SidebarLink active={currentView === 'list'} onClick={() => {setCurrentView('list'); setVisibleCount(20); setSidebarOpen(false);}} icon="database" label="Records Vault" />
