@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v8.5 (Cheque Scanner Edition)</title>
+    <title>IRSHAD SYSTEM | Registry v10.1 (Stable Manual)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -26,6 +26,7 @@
         .status-btn:active { transform: scale(0.95); }
         .login-wrapper { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
         input, select, textarea { font-size: 16px !important; }
+        
         @media print {
             .no-print { display: none !important; }
             body { background: white; }
@@ -36,7 +37,6 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
@@ -191,70 +191,51 @@
             const [updaterName, setUpdaterName] = useState(''); 
             const [selectedNewStatus, setSelectedNewStatus] = useState(null);
 
-            const [isScanning, setIsScanning] = useState(false);
-            const [scanStatus, setScanStatus] = useState('');
+            // MULTI-CHEQUE STATE
+            const [tempCheque, setTempCheque] = useState({ date: '', number: '', amount: '', beneficiary: '' });
 
-            // CHANGED: Added chequeDetails to initial state
             const emptyForm = {
                 serialNo: '', reference: '', institution: '', caseType: 'Sale', remark: '',
                 buyerName: '', buyerId: '', buyerEmail: '', buyerPhone: '',
                 sellerName: '', sellerId: '', sellerEmail: '', sellerPhone: '',
                 status: 'Pending', processor: '', dateReceived: '', dateHandover: '',
-                photo: null, customData: {},
-                chequeDetails: { chequeDate: '', beneficiary: '', amount: '', chequeNo: '' }
+                customData: {},
+                cheques: [] // Array to store multiple cheques
             };
             const [formData, setFormData] = useState(emptyForm);
 
-            // REFINED LOGIC: Parse data specifically for UAE/Standard Cheques
-            const parseChequeData = (text) => {
-                const details = { chequeDate: '', beneficiary: '', amount: '', chequeNo: '' };
-                const cleanText = text.replace(/\|/g, ''); // Remove common OCR noise lines
-
-                // 1. IMPROVED DATE FINDER (Handles "23-Jan-2026" and "23/01/2026")
-                // Looks for DD-MMM-YYYY (e.g., 23-Jan-2026) or DD/MM/YYYY
-                const datePattern = /(\d{1,2}[-\s./]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2})[-\s./]+\d{2,4})/i;
-                const dateMatch = text.match(datePattern);
-                if (dateMatch) details.chequeDate = dateMatch[0];
-
-                // 2. IMPROVED AMOUNT FINDER (Looks for "AED" or big numbers with commas)
-                // We look for the pattern specifically near "AED" or simply the largest number format
-                const amountPattern = /(?:AED|Dhs\.?)\s*([\d,]+\.\d{2})/i;
-                const amountMatch = text.match(amountPattern);
-                if (amountMatch) {
-                    details.amount = amountMatch[1];
-                } else {
-                    // Fallback: Find any number like 4,955.00
-                    const numbers = text.match(/(\d{1,3}(,\d{3})*(\.\d{2}))/g);
-                    if (numbers && numbers.length > 0) {
-                        // Usually the amount is the last number detected on the right side
-                        details.amount = numbers[numbers.length - 1]; 
-                    }
-                }
-
-                // 3. IMPROVED CHEQUE NO (MICR Line at bottom)
-                // The cheque number is usually the first 6 digits in the strange line at the bottom
-                // We look for a standalone 6-digit number, often starting with 0 or 1
-                const micrPattern = /\b([0-9]{6})\b/; 
-                const micrMatch = text.match(micrPattern);
-                if (micrMatch) details.chequeNo = micrMatch[1];
-
-                // 4. IMPROVED BENEFICIARY (The hardest part)
-                // We look for lines that have "Pay" or "Order" and take the text AFTER that.
-                // Or we look for common company suffixes like "REAL ESTATE" or "LLC"
-                
-                // Strategy A: Look for "Pay... Bearer [NAME]"
-                const payPattern = /(?:Bearer|Order of)[:\s]*([A-Z\s\.]+)/i;
-                const payMatch = text.match(payPattern);
-                if (payMatch && payMatch[1] && payMatch[1].length > 3) {
-                    details.beneficiary = payMatch[1].replace(/Bearer/i, '').trim();
-                } else {
-                    // Strategy B: If that fails, assume the line with "REAL ESTATE" is the name
-                    const realEstateMatch = text.match(/([A-Z\s]+REAL ESTATE[A-Z\s]*)/i);
-                    if (realEstateMatch) details.beneficiary = realEstateMatch[1].trim();
-                }
-
-                return details;
+            // ADD CHEQUE TO LIST
+            const addCheque = () => {
+                if(!tempCheque.number || !tempCheque.amount) return alert("Please enter Cheque Number and Amount");
+                setFormData({
+                    ...formData,
+                    cheques: [...(formData.cheques || []), tempCheque]
+                });
+                setTempCheque({ date: '', number: '', amount: '', beneficiary: '' }); // Reset input
             };
+
+            // REMOVE CHEQUE FROM LIST
+            const removeCheque = (index) => {
+                const updatedList = [...(formData.cheques || [])];
+                updatedList.splice(index, 1);
+                setFormData({ ...formData, cheques: updatedList });
+            };
+
+            // --- FIXED: OPEN MODIFY WITH SAFETY CHECK ---
+            const openModify = (c) => { 
+                setIsEditing(true); 
+                // SAFETY MERGE: This prevents the blank screen
+                // It ensures that even if 'c' (the old record) is missing fields like 'cheques',
+                // we safely add them from 'emptyForm' defaults.
+                setFormData({
+                    ...emptyForm,
+                    ...c,
+                    cheques: Array.isArray(c.cheques) ? c.cheques : [],
+                    customData: c.customData || {}
+                }); 
+                setShowModal(true); 
+            };
+
             const parseDateHelper = (dStr) => {
                 if (!dStr) return 0;
                 const clean = dStr.split(',')[0].trim(); 
@@ -455,7 +436,7 @@
                                 if (!cleanKey || cleanKey.startsWith('__EMPTY')) return;
                                 const isSystem = SYSTEM_FIELDS.some(sf => sf.key.toLowerCase() === cleanKey.toLowerCase() || sf.label.toLowerCase() === cleanKey.toLowerCase());
                                 const isStatusField = ['status', 'current status'].includes(cleanKey.toLowerCase());
-                                const isDateLogic = ['timestamp', 'date', 'created at', 'date created', 'date received', 'date handover'].includes(cleanKey.toLowerCase());
+                                const isDateLogic = ['timestamp', 'date', 'created at', 'date received', 'date handover'].includes(cleanKey.toLowerCase());
                                 if (!isSystem && !isStatusField && !isDateLogic) currentHeadings.add(cleanKey);
                             });
                         });
@@ -565,6 +546,11 @@
                         const row = {};
                         SYSTEM_FIELDS.forEach(f => row[f.label] = c[f.key] || "-");
                         customHeadings.forEach(h => row[h] = (c.customData && c.customData[h]) || "-");
+                        // NEW: Add basic cheque summary if any
+                        if(c.cheques && c.cheques.length > 0) {
+                            row['Cheque Count'] = c.cheques.length;
+                            row['First Cheque No'] = c.cheques[0].number;
+                        }
                         return row;
                     });
                     const ws = window.XLSX.utils.json_to_sheet(excelData);
@@ -655,53 +641,8 @@
             }, [cases, search, startDate, endDate]);
 
             const openNewEntry = () => { setIsEditing(false); setFormData(emptyForm); setShowModal(true); };
-            const openModify = (c) => { setIsEditing(true); setFormData(c); setShowModal(true); };
-            const closeModal = () => { 
-                setShowModal(false); setIsEditing(false); 
-            };
+            const closeModal = () => { setShowModal(false); setIsEditing(false); };
             
-            // CHANGED: File Upload Logic
-            const handleScannedFile = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        setFormData(prev => ({ ...prev, photo: reader.result })); 
-                        performOCR(reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            };
-
-            // CHANGED: performOCR now populates cheque details
-            const performOCR = (image) => {
-                if(!window.Tesseract) return; 
-                setIsScanning(true); 
-                setScanStatus('Analyzing Cheque Data...');
-                
-                Tesseract.recognize(image, 'eng', { 
-                    logger: m => setScanStatus(`Processing: ${Math.round(m.progress * 100)}%`) 
-                }).then(({ data: { text } }) => {
-                    // Extract structured data
-                    const extracted = parseChequeData(text);
-                    
-                    setFormData(prev => ({ 
-                        ...prev, 
-                        // Save the structured details
-                        chequeDetails: extracted,
-                        // Still keep raw text in remark just in case
-                        remark: (prev.remark + " [RAW SCAN: " + text.replace(/\n/g, " ").trim() + "]").trim() 
-                    })); 
-                    
-                    setScanStatus(''); 
-                    setIsScanning(false);
-                }).catch(err => { 
-                    console.error(err); 
-                    setScanStatus('Analysis failed'); 
-                    setTimeout(() => setIsScanning(false), 2000); 
-                });
-            };
-
             const toggleReportStatus = (s) => {
                 const current = [...reportFilters.status];
                 const idx = current.indexOf(s);
@@ -858,25 +799,41 @@
                                             {Array.from(new Set([...customHeadings, ...Object.keys(selectedCase.customData || {})])).map(h => (<DetailCard key={h} label={h} value={(selectedCase.customData && selectedCase.customData[h])} icon="plus-circle" />))}
                                             {selectedCase.lastUpdatedBy && (<DetailCard label="Last Updated By" value={selectedCase.lastUpdatedBy} icon="user-check" />)}
                                             {selectedCase.statusTimestamp && (<DetailCard label="Last Update Time" value={selectedCase.statusTimestamp} icon="clock" />)}
-                                            
-                                            {/* CHANGED: NEW CHECK DETAILS SECTION */}
-                                            {(selectedCase.chequeDetails?.amount || selectedCase.chequeDetails?.chequeNo) && (
-                                                <div className="col-span-full mt-6 mb-2">
-                                                    <h4 className="text-[12px] font-black text-slate-800 uppercase tracking-widest border-b pb-2 mb-4 flex items-center gap-2">
-                                                        <Icon name="credit-card" size={14} className="text-blue-600"/> 
-                                                        Check Details
-                                                    </h4>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                                        <DetailCard label="Cheque Date" value={selectedCase.chequeDetails.chequeDate} icon="calendar" />
-                                                        <DetailCard label="Cheque No" value={selectedCase.chequeDetails.chequeNo} icon="hash" />
-                                                        <DetailCard label="Beneficiary" value={selectedCase.chequeDetails.beneficiary} icon="user" />
-                                                        <DetailCard label="Amount" value={selectedCase.chequeDetails.amount} icon="dollar-sign" />
-                                                    </div>
-                                                </div>
-                                            )}
-
                                         </div>
-                                        {selectedCase.photo && <div className="mt-8"><p className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">Attachment</p><img src={selectedCase.photo} className="w-full rounded-3xl border shadow-lg" /></div>}
+
+                                        {/* --- MULTI-CHEQUE TABLE DISPLAY --- */}
+                                        {selectedCase.cheques && selectedCase.cheques.length > 0 && (
+                                            <div className="mt-8">
+                                                <h4 className="text-[12px] font-black text-slate-800 uppercase tracking-widest border-b pb-2 mb-4 flex items-center gap-2">
+                                                    <Icon name="list" size={14} className="text-blue-600"/> 
+                                                    Cheque List ({selectedCase.cheques.length})
+                                                </h4>
+                                                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                                    <table className="w-full text-left text-[11px]">
+                                                        <thead className="bg-slate-50 text-slate-400 font-black uppercase tracking-wider">
+                                                            <tr>
+                                                                <th className="p-3">#</th>
+                                                                <th className="p-3">Date</th>
+                                                                <th className="p-3">Number</th>
+                                                                <th className="p-3">Amount</th>
+                                                                <th className="p-3">Beneficiary</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-50 bg-white font-bold text-slate-700">
+                                                            {selectedCase.cheques.map((ch, i) => (
+                                                                <tr key={i}>
+                                                                    <td className="p-3 text-slate-400">{i+1}</td>
+                                                                    <td className="p-3">{ch.date}</td>
+                                                                    <td className="p-3">{ch.number}</td>
+                                                                    <td className="p-3">{ch.amount}</td>
+                                                                    <td className="p-3">{ch.beneficiary}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -909,76 +866,82 @@
                                     <div className="space-y-4">
                                         <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Case Information</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Serial No" value={formData.serialNo} onChange={v => setFormData({...formData, serialNo: v})} required />
-                                            <Input label="Reference" value={formData.reference} onChange={v => setFormData({...formData, reference: v})} required />
-                                            <Select label="Institution" value={formData.institution} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
-                                            <Select label="Case Type" value={formData.caseType} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
-                                            <Input label="Remark" value={formData.remark} onChange={v => setFormData({...formData, remark: v})} />
+                                            <Input label="Serial No" value={formData.serialNo || ''} onChange={v => setFormData({...formData, serialNo: v})} required />
+                                            <Input label="Reference" value={formData.reference || ''} onChange={v => setFormData({...formData, reference: v})} required />
+                                            <Select label="Institution" value={formData.institution || ''} options={bankList} onChange={v => setFormData({...formData, institution: v})} />
+                                            <Select label="Case Type" value={formData.caseType || 'Sale'} options={['Sale', 'Mortgage', 'Gift', 'Evaluation']} onChange={v => setFormData({...formData, caseType: v})} />
+                                            <Input label="Remark" value={formData.remark || ''} onChange={v => setFormData({...formData, remark: v})} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
                                         <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Buyer Details</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.buyerName} onChange={v => setFormData({...formData, buyerName: v})} />
-                                            <Input label="ID Number" value={formData.buyerId} onChange={v => setFormData({...formData, buyerId: v})} />
-                                            <Input label="Email" type="email" value={formData.buyerEmail} onChange={v => setFormData({...formData, buyerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.buyerPhone} onChange={v => setFormData({...formData, buyerPhone: v})} />
+                                            <Input label="Name" value={formData.buyerName || ''} onChange={v => setFormData({...formData, buyerName: v})} />
+                                            <Input label="ID Number" value={formData.buyerId || ''} onChange={v => setFormData({...formData, buyerId: v})} />
+                                            <Input label="Email" type="email" value={formData.buyerEmail || ''} onChange={v => setFormData({...formData, buyerEmail: v})} />
+                                            <Input label="Phone" type="tel" value={formData.buyerPhone || ''} onChange={v => setFormData({...formData, buyerPhone: v})} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
                                         <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Seller Details</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input label="Name" value={formData.sellerName} onChange={v => setFormData({...formData, sellerName: v})} />
-                                            <Input label="ID Number" value={formData.sellerId} onChange={v => setFormData({...formData, sellerId: v})} />
-                                            <Input label="Email" type="email" value={formData.sellerEmail} onChange={v => setFormData({...formData, sellerEmail: v})} />
-                                            <Input label="Phone" type="tel" value={formData.sellerPhone} onChange={v => setFormData({...formData, sellerPhone: v})} />
+                                            <Input label="Name" value={formData.sellerName || ''} onChange={v => setFormData({...formData, sellerName: v})} />
+                                            <Input label="ID Number" value={formData.sellerId || ''} onChange={v => setFormData({...formData, sellerId: v})} />
+                                            <Input label="Email" type="email" value={formData.sellerEmail || ''} onChange={v => setFormData({...formData, sellerEmail: v})} />
+                                            <Input label="Phone" type="tel" value={formData.sellerPhone || ''} onChange={v => setFormData({...formData, sellerPhone: v})} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
                                         <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Processing Details</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Select label="Current Status" value={formData.status} options={statusList} onChange={v => setFormData({...formData, status: v})} />
-                                            <Input label="Processor Note" value={formData.processor} onChange={v => setFormData({...formData, processor: v})} />
-                                            <Input label="Date Received" value={formData.dateReceived} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
-                                            <Input label="Date Handover" value={formData.dateHandover} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
+                                            <Select label="Current Status" value={formData.status || 'Pending'} options={statusList} onChange={v => setFormData({...formData, status: v})} />
+                                            <Input label="Processor Note" value={formData.processor || ''} onChange={v => setFormData({...formData, processor: v})} />
+                                            <Input label="Date Received" value={formData.dateReceived || ''} onChange={v => setFormData({...formData, dateReceived: v})} placeholder="DD/MM/YYYY" />
+                                            <Input label="Date Handover" value={formData.dateHandover || ''} onChange={v => setFormData({...formData, dateHandover: v})} placeholder="DD/MM/YYYY" />
                                         </div>
                                     </div>
                                     
-                                    {/* CHANGED: REPLACED CAMERA WITH UPLOAD SCANNER */}
-                                    <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 space-y-4">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-blue-200 pb-2">Cheque Scanning</h4>
+                                    {/* --- MULTI-CHEQUE ENTRY SYSTEM --- */}
+                                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cheque Details</h4>
+                                            <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded-lg border">{formData.cheques ? formData.cheques.length : 0} Added</span>
+                                        </div>
                                         
-                                        <div className="relative border-4 border-dashed border-blue-200 rounded-2xl p-8 text-center hover:bg-white transition-all">
-                                            <input type="file" accept="image/*" onChange={handleScannedFile} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                            <div className="text-blue-400 mb-2 inline-block"><Icon name="maximize" size={32}/></div>
-                                            <p className="text-[10px] font-black uppercase text-slate-400">Click to Upload Scanned Cheque</p>
-                                            {isScanning && <div className="mt-2 text-blue-600 font-bold text-xs animate-pulse">{scanStatus}</div>}
-                                            {formData.photo && !isScanning && <div className="mt-2 text-emerald-600 font-bold text-xs">Image Uploaded & Processed</div>}
+                                        {/* Input Row */}
+                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                            <Input label="Cheque Date" value={tempCheque.date} onChange={v => setTempCheque({...tempCheque, date: v})} placeholder="DD/MM/YYYY"/>
+                                            <Input label="Cheque No" value={tempCheque.number} onChange={v => setTempCheque({...tempCheque, number: v})} placeholder="000000"/>
+                                            <Input label="Amount" value={tempCheque.amount} onChange={v => setTempCheque({...tempCheque, amount: v})} placeholder="0.00"/>
+                                            <Input label="Beneficiary" value={tempCheque.beneficiary} onChange={v => setTempCheque({...tempCheque, beneficiary: v})} placeholder="Name"/>
                                         </div>
+                                        <button type="button" onClick={addCheque} className="w-full py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-all mb-4">
+                                            + Add Cheque to List
+                                        </button>
 
-                                        {/* Display Extracted Fields for Verification/Editing */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                            <Input 
-                                                label="Cheque Date" 
-                                                value={formData.chequeDetails?.chequeDate || ''} 
-                                                onChange={v => setFormData({...formData, chequeDetails: {...formData.chequeDetails, chequeDate: v}})} 
-                                            />
-                                            <Input 
-                                                label="Cheque Number" 
-                                                value={formData.chequeDetails?.chequeNo || ''} 
-                                                onChange={v => setFormData({...formData, chequeDetails: {...formData.chequeDetails, chequeNo: v}})} 
-                                            />
-                                            <Input 
-                                                label="Beneficiary Name" 
-                                                value={formData.chequeDetails?.beneficiary || ''} 
-                                                onChange={v => setFormData({...formData, chequeDetails: {...formData.chequeDetails, beneficiary: v}})} 
-                                            />
-                                            <Input 
-                                                label="Amount" 
-                                                value={formData.chequeDetails?.amount || ''} 
-                                                onChange={v => setFormData({...formData, chequeDetails: {...formData.chequeDetails, amount: v}})} 
-                                            />
-                                        </div>
+                                        {/* Cheque List Table */}
+                                        {formData.cheques && formData.cheques.length > 0 && (
+                                            <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                                                <table className="w-full text-left text-[10px]">
+                                                    <thead className="bg-slate-50 text-slate-400 font-bold uppercase">
+                                                        <tr>
+                                                            <th className="p-2 pl-3">No</th>
+                                                            <th className="p-2">Amount</th>
+                                                            <th className="p-2 text-right pr-3">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-50">
+                                                        {formData.cheques.map((c, i) => (
+                                                            <tr key={i}>
+                                                                <td className="p-2 pl-3 font-bold text-slate-700">{c.number}</td>
+                                                                <td className="p-2 font-bold text-slate-700">{c.amount}</td>
+                                                                <td className="p-2 text-right pr-3"><button type="button" onClick={() => removeCheque(i)} className="text-red-400 hover:text-red-600"><Icon name="trash-2" size={14}/></button></td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {Array.from(new Set([...customHeadings, ...Object.keys(formData.customData || {})])).length > 0 && (
@@ -989,7 +952,7 @@
                                             </div>
                                         </div>
                                     )}
-                                    <button type="submit" disabled={isScanning} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all disabled:bg-slate-300">Save Changes</button>
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all">Save Changes</button>
                                 </form>
                             </div>
                         </div>
@@ -1028,7 +991,7 @@
 
         const DetailCard = ({ label, value, icon }) => (<div className="bg-white p-4 rounded-2xl border border-slate-50 shadow-sm flex items-start gap-3"><div className="p-2.5 bg-slate-50 text-slate-400 rounded-xl shrink-0"><Icon name={icon} size={16} /></div><div className="overflow-hidden"><span className="text-[8px] font-black text-slate-400 uppercase block tracking-widest mb-0.5">{label}</span><p className="font-black text-[11px] text-slate-800 truncate">{value || '-'}</p></div></div>);
         const SidebarLink = ({ active, onClick, icon, label }) => (<button onClick={onClick} className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-sm transition-all ${active ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name={icon} size={18} /> {label}</button>);
-        const Input = ({ label, type = "text", ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><input type={type} {...props} onChange={e => props.onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-blue-100 outline-none transition-all" /></div>);
+        const Input = ({ label, type = "text", className = "", ...props }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><input type={type} {...props} onChange={e => props.onChange(e.target.value)} className={`w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-blue-100 outline-none transition-all ${className}`} /></div>);
         const Select = ({ label, options, value, onChange }) => (<div className="space-y-1 flex-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label><div className="relative"><select value={value} onChange={e => onChange(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-sm text-slate-700 appearance-none shadow-inner outline-none transition-all focus:ring-2 focus:ring-blue-100">{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select><div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Icon name="chevron-down" size={14} /></div></div></div>);
         const CategoryManager = ({ title, list, onUpdate }) => { const [val, setVal] = useState(''); return (<div className="space-y-4"><h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest border-l-4 border-blue-600 pl-3">{title}</h4><div className="flex gap-3"><input type="text" className="flex-1 bg-slate-100 p-4 rounded-2xl border-none font-bold text-sm shadow-inner outline-none" placeholder={`Add new...`} value={val} onChange={e => setVal(e.target.value)} /><button onClick={() => {if(val){onUpdate([...list, val]); setVal('')}}} className="bg-blue-600 text-white px-6 rounded-2xl font-black shadow-lg hover:scale-105 active:scale-95 transition-all"><Icon name="plus" /></button></div><div className="flex flex-wrap gap-2">{list.map((item, i) => (<div key={i} className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-100 group shadow-sm transition-all hover:border-red-200"><span className="text-sm font-black text-slate-700">{item}</span><button onClick={() => onUpdate(list.filter((_, idx) => idx !== i))} className="text-slate-300 group-hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></div>))}</div></div>); };
 
