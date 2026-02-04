@@ -205,34 +205,56 @@
             };
             const [formData, setFormData] = useState(emptyForm);
 
-            // LOGIC: Parse data from Cheque Image
+            // REFINED LOGIC: Parse data specifically for UAE/Standard Cheques
             const parseChequeData = (text) => {
                 const details = { chequeDate: '', beneficiary: '', amount: '', chequeNo: '' };
-                
-                // 1. Find Date (DD-MM-YYYY or DD/MM/YYYY)
-                const datePattern = /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/;
+                const cleanText = text.replace(/\|/g, ''); // Remove common OCR noise lines
+
+                // 1. IMPROVED DATE FINDER (Handles "23-Jan-2026" and "23/01/2026")
+                // Looks for DD-MMM-YYYY (e.g., 23-Jan-2026) or DD/MM/YYYY
+                const datePattern = /(\d{1,2}[-\s./]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2})[-\s./]+\d{2,4})/i;
                 const dateMatch = text.match(datePattern);
                 if (dateMatch) details.chequeDate = dateMatch[0];
 
-                // 2. Find Amount (Matches currency formats)
-                const numbers = text.match(/(\d{1,3}(,\d{3})*(\.\d{2}))/g);
-                if (numbers && numbers.length > 0) {
-                    details.amount = numbers[numbers.length - 1]; 
+                // 2. IMPROVED AMOUNT FINDER (Looks for "AED" or big numbers with commas)
+                // We look for the pattern specifically near "AED" or simply the largest number format
+                const amountPattern = /(?:AED|Dhs\.?)\s*([\d,]+\.\d{2})/i;
+                const amountMatch = text.match(amountPattern);
+                if (amountMatch) {
+                    details.amount = amountMatch[1];
+                } else {
+                    // Fallback: Find any number like 4,955.00
+                    const numbers = text.match(/(\d{1,3}(,\d{3})*(\.\d{2}))/g);
+                    if (numbers && numbers.length > 0) {
+                        // Usually the amount is the last number detected on the right side
+                        details.amount = numbers[numbers.length - 1]; 
+                    }
                 }
 
-                // 3. Find Cheque Number (6 digits usually at bottom)
-                const micrPattern = /[ "]([0-9]{6})[ "]/;
+                // 3. IMPROVED CHEQUE NO (MICR Line at bottom)
+                // The cheque number is usually the first 6 digits in the strange line at the bottom
+                // We look for a standalone 6-digit number, often starting with 0 or 1
+                const micrPattern = /\b([0-9]{6})\b/; 
                 const micrMatch = text.match(micrPattern);
                 if (micrMatch) details.chequeNo = micrMatch[1];
 
-                // 4. Beneficiary (Try to find text after "Pay")
-                const payPattern = /(?:Pay to|Pay against|Order of)[:\s]*([A-Za-z\s]+)/i;
+                // 4. IMPROVED BENEFICIARY (The hardest part)
+                // We look for lines that have "Pay" or "Order" and take the text AFTER that.
+                // Or we look for common company suffixes like "REAL ESTATE" or "LLC"
+                
+                // Strategy A: Look for "Pay... Bearer [NAME]"
+                const payPattern = /(?:Bearer|Order of)[:\s]*([A-Z\s\.]+)/i;
                 const payMatch = text.match(payPattern);
-                if (payMatch && payMatch[1]) details.beneficiary = payMatch[1].trim();
+                if (payMatch && payMatch[1] && payMatch[1].length > 3) {
+                    details.beneficiary = payMatch[1].replace(/Bearer/i, '').trim();
+                } else {
+                    // Strategy B: If that fails, assume the line with "REAL ESTATE" is the name
+                    const realEstateMatch = text.match(/([A-Z\s]+REAL ESTATE[A-Z\s]*)/i);
+                    if (realEstateMatch) details.beneficiary = realEstateMatch[1].trim();
+                }
 
                 return details;
             };
-
             const parseDateHelper = (dStr) => {
                 if (!dStr) return 0;
                 const clean = dStr.split(',')[0].trim(); 
