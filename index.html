@@ -502,94 +502,104 @@
                 reader.readAsBinaryString(file);
             };
 
-            const generateSpecificReport = (type) => {
-                const { bank, status, startDate, endDate } = reportFilters;
-                
-                const parseDate = (dStr) => {
-                    if (!dStr) return null;
-                    const clean = dStr.split(',')[0].trim(); 
-                    if (clean.includes('/')) {
-                        const parts = clean.split('/');
-                        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                    } else if (clean.includes('-')) {
-                        const parts = clean.split('-');
-                        if(parts[0].length === 4) return new Date(clean); 
-                        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                    }
-                    return new Date(clean);
-                };
+           const generateSpecificReport = (type) => {
+    const { bank, status, startDate, endDate } = reportFilters;
+    
+    // ... (keep your existing date parsing logic here) ...
+    const parseDate = (dStr) => {
+        if (!dStr) return null;
+        const clean = dStr.split(',')[0].trim(); 
+        if (clean.includes('/')) {
+            const parts = clean.split('/');
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        } else if (clean.includes('-')) {
+            const parts = clean.split('-');
+            if(parts[0].length === 4) return new Date(clean); 
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+        return new Date(clean);
+    };
 
-                const targetData = cases.filter(c => {
-                    const matchBank = bank ? (c.institution || "").trim() === bank.trim() : true;
-                    const matchStatus = status.length > 0 ? status.some(s => (c.status || "").trim().toLowerCase() === s.trim().toLowerCase()) : true;
-                    let matchDate = true;
-                    if (startDate || endDate) {
-                        try {
-                            let dateStrToCheck = c.timestamp; 
-                            if (c.status === 'Pending' && c.dateReceived) dateStrToCheck = c.dateReceived;
-                            else if (c.status === 'Delivered' && c.dateHandover) dateStrToCheck = c.dateHandover;
+    const targetData = cases.filter(c => {
+        const matchBank = bank ? (c.institution || "").trim() === bank.trim() : true;
+        const matchStatus = status.length > 0 ? status.some(s => (c.status || "").trim().toLowerCase() === s.trim().toLowerCase()) : true;
+        let matchDate = true;
+        if (startDate || endDate) {
+            try {
+                let dateStrToCheck = c.timestamp; 
+                if (c.status === 'Pending' && c.dateReceived) dateStrToCheck = c.dateReceived;
+                else if (c.status === 'Delivered' && c.dateHandover) dateStrToCheck = c.dateHandover;
 
-                            const caseDate = parseDate(dateStrToCheck);
-                            if (caseDate && !isNaN(caseDate)) {
-                                if (startDate) matchDate = matchDate && caseDate >= new Date(startDate);
-                                if (endDate) matchDate = matchDate && caseDate <= new Date(endDate);
-                            } else { matchDate = false; }
-                        } catch (e) { console.error("Date error", e); matchDate = false; }
-                    }
-                    return matchBank && matchStatus && matchDate;
-                });
+                const caseDate = parseDate(dateStrToCheck);
+                if (caseDate && !isNaN(caseDate)) {
+                    if (startDate) matchDate = matchDate && caseDate >= new Date(startDate);
+                    if (endDate) matchDate = matchDate && caseDate <= new Date(endDate);
+                } else { matchDate = false; }
+            } catch (e) { console.error("Date error", e); matchDate = false; }
+        }
+        return matchBank && matchStatus && matchDate;
+    });
 
-                if (targetData.length === 0) return alert("No records found matching your filters.");
+    if (targetData.length === 0) return alert("No records found matching your filters.");
 
-                if (type === 'excel') {
-                    const excelData = targetData.map(c => {
-                        const row = {};
-                        SYSTEM_FIELDS.forEach(f => row[f.label] = c[f.key] || "-");
-                        customHeadings.forEach(h => row[h] = (c.customData && c.customData[h]) || "-");
-                        // NEW: Add basic cheque summary if any
-                        if(c.cheques && c.cheques.length > 0) {
-                            row['Cheque Count'] = c.cheques.length;
-                            row['First Cheque No'] = c.cheques[0].number;
-                        }
-                        return row;
-                    });
-                    const ws = window.XLSX.utils.json_to_sheet(excelData);
-                    const wb = window.XLSX.utils.book_new();
-                    window.XLSX.utils.book_append_sheet(wb, ws, "Report");
-                    window.XLSX.writeFile(wb, `Report_${bank || 'All'}.xlsx`);
-                } else {
-                    const { jsPDF } = window.jspdf;
-                    const doc = new jsPDF('l', 'mm', 'a4');
-                    doc.setFontSize(18); 
-                    if (reportFilters.status.includes('Delivered')) doc.text("OFFICIAL DELIVERY REPORT", 14, 20);
-                    else doc.text("OFFICIAL STATUS REPORT", 14, 20);
-                    doc.setFontSize(10); 
-                    let subText = `Generated on: ${new Date().toLocaleString()}`;
-                    if (startDate || endDate) subText += ` | Range: ${startDate || 'Start'} to ${endDate || 'Now'}`;
-                    doc.text(subText, 14, 27);
-                    const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Date Ref"]];
-                    const body = targetData.map(c => {
-                        let displayDate = c.timestamp;
-                        if(c.status === 'Pending') displayDate = c.dateReceived;
-                        else if(c.status === 'Delivered') displayDate = c.dateHandover;
-                        return [c.serialNo, c.reference, c.institution, c.buyerName, c.sellerName, c.status, displayDate || '-'];
-                    });
-                    doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
-                    if (reportFilters.status.includes('Delivered')) {
-                        let finalY = doc.lastAutoTable.finalY + 25;
-                        if (finalY > 170) { doc.addPage(); finalY = 40; }
-                        doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                        doc.text("Prepared By:", 30, finalY); doc.line(30, finalY + 15, 90, finalY + 15); 
-                        doc.text("Delivered By:", 120, finalY); doc.line(120, finalY + 15, 180, finalY + 15); 
-                        doc.text("Received By:", 210, finalY); doc.line(210, finalY + 15, 270, finalY + 15); 
-                        doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                        doc.text("(Signature & Date)", 30, finalY + 20); doc.text("(Signature & Date)", 120, finalY + 20); doc.text("(Signature & Date)", 210, finalY + 20);
-                    }
-                    doc.save("Report.pdf");
-                }
-                setShowReportModal(false);
-            };
+    if (type === 'excel') {
+        // ... (Keep your existing Excel logic) ...
+        const excelData = targetData.map(c => {
+            const row = {};
+            SYSTEM_FIELDS.forEach(f => row[f.label] = c[f.key] || "-");
+            customHeadings.forEach(h => row[h] = (c.customData && c.customData[h]) || "-");
+            if(c.cheques && c.cheques.length > 0) {
+                row['Cheque Count'] = c.cheques.length;
+                row['First Cheque No'] = c.cheques[0].number;
+            }
+            return row;
+        });
+        const ws = window.XLSX.utils.json_to_sheet(excelData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Report");
+        window.XLSX.writeFile(wb, `Report_${bank || 'All'}.xlsx`);
+    } else {
+        // --- PDF LOGIC STARTS HERE ---
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4');
+        doc.setFontSize(18); 
+        if (reportFilters.status.includes('Delivered')) doc.text("OFFICIAL DELIVERY REPORT", 14, 20);
+        else doc.text("OFFICIAL STATUS REPORT", 14, 20);
+        doc.setFontSize(10); 
+        let subText = `Generated on: ${new Date().toLocaleString()}`;
+        if (startDate || endDate) subText += ` | Range: ${startDate || 'Start'} to ${endDate || 'Now'}`;
+        doc.text(subText, 14, 27);
+        
+        const header = [["SI", "Ref", "Inst", "Buyer", "Seller", "Status", "Date Ref"]];
+        
+        // --- THIS IS THE PART I CHANGED FOR YOU ---
+        // We added (c, index) to the map function
+        // We replaced c.serialNo with (index + 1)
+        const body = targetData.map((c, index) => {
+            let displayDate = c.timestamp;
+            if(c.status === 'Pending') displayDate = c.dateReceived;
+            else if(c.status === 'Delivered') displayDate = c.dateHandover;
+            
+            // CHANGE: index + 1 creates 1, 2, 3, 4 automatically
+            return [index + 1, c.reference, c.institution, c.buyerName, c.sellerName, c.status, displayDate || '-'];
+        });
+        // ------------------------------------------
 
+        doc.autoTable({ head: header, body, startY: 35, theme: 'grid' });
+        if (reportFilters.status.includes('Delivered')) {
+            let finalY = doc.lastAutoTable.finalY + 25;
+            if (finalY > 170) { doc.addPage(); finalY = 40; }
+            doc.setFontSize(10); doc.setFont("helvetica", "bold");
+            doc.text("Prepared By:", 30, finalY); doc.line(30, finalY + 15, 90, finalY + 15); 
+            doc.text("Delivered By:", 120, finalY); doc.line(120, finalY + 15, 180, finalY + 15); 
+            doc.text("Received By:", 210, finalY); doc.line(210, finalY + 15, 270, finalY + 15); 
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("(Signature & Date)", 30, finalY + 20); doc.text("(Signature & Date)", 120, finalY + 20); doc.text("(Signature & Date)", 210, finalY + 20);
+        }
+        doc.save("Report.pdf");
+    }
+    setShowReportModal(false);
+};
             const exportVaultPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('l', 'mm', 'a4');
