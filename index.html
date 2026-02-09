@@ -795,16 +795,22 @@
                                 </div>
                             </div>
                         )}
-                        {currentView === 'list' && (
+                       {currentView === 'list' && (
                             <div className="space-y-6">
-                                <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                                    <div className="relative mb-4"><div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="search" size={18} /></div><input type="text" placeholder="Search Vault..." className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl outline-none shadow-inner" value={search} onChange={e => {setSearch(e.target.value); setVisibleCount(20);}} /></div>
-                                    <div className="flex flex-wrap gap-4">
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">From Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={startDate} onChange={e => {setStartDate(e.target.value); setVisibleCount(20);}} /></div>
-                                        <div className="flex-1 min-w-[150px]"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">To Date</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border-none text-xs font-bold shadow-inner" value={endDate} onChange={e => {setEndDate(e.target.value); setVisibleCount(20);}} /></div>
+                                {/* Search & Filter Section - Made Compact */}
+                                <div className="bg-white p-4 rounded-3xl border shadow-sm">
+                                    <div className="relative mb-3">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="search" size={16} /></div>
+                                        <input type="text" placeholder="Search Vault..." className="w-full py-3 pl-10 pr-4 bg-slate-50 border-none rounded-xl outline-none shadow-inner text-sm font-bold" value={search} onChange={e => {setSearch(e.target.value); setVisibleCount(20);}} />
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <div className="flex-1 min-w-[120px]"><input type="date" className="w-full p-2 bg-slate-50 rounded-lg border-none text-[10px] font-bold shadow-inner uppercase text-slate-600" value={startDate} onChange={e => {setStartDate(e.target.value); setVisibleCount(20);}} /></div>
+                                        <div className="flex-1 min-w-[120px]"><input type="date" className="w-full p-2 bg-slate-50 rounded-lg border-none text-[10px] font-bold shadow-inner uppercase text-slate-600" value={endDate} onChange={e => {setEndDate(e.target.value); setVisibleCount(20);}} /></div>
                                     </div>
                                 </div>
-                                <div className="grid gap-4">
+
+                                {/* NEW RESPONSIVE GRID LAYOUT */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                     {filteredData.slice(0, visibleCount).map(c => {
                                         let displayDate = c.timestamp;
                                         let dateLabel = "Updated";
@@ -812,28 +818,57 @@
                                         else if (c.status === 'Delivered' && c.dateHandover) { displayDate = c.dateHandover; dateLabel = "Handover"; }
 
                                         return (
-                                            <div key={c.id} className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between gap-4 group hover:border-blue-200 transition-all animate-in slide-in-from-bottom-2 duration-300">
-                                                <div className="flex items-center gap-5 w-full">
-                                                    <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0">#{c.serialNo}</div>
-                                                    <div className="overflow-hidden w-full">
-                                                        <h3 className="font-bold text-slate-800 truncate">{c.institution} ({c.reference})</h3>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{c.buyerName} vs {c.sellerName}</p>
-                                                        <p className="text-[9px] text-blue-500 font-bold mt-1 uppercase tracking-wider">{dateLabel}: {displayDate}</p>
+                                            <div key={c.id} className="bg-white p-4 rounded-2xl border hover:border-blue-300 hover:shadow-md transition-all flex flex-col justify-between group h-full">
+                                                {/* Card Header: Serial & Status */}
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="bg-slate-900 text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-md">
+                                                        #{c.serialNo}
+                                                    </div>
+                                                    <button onClick={() => openStatusModal(c)} className="scale-75 origin-top-right -mt-1 -mr-2">
+                                                        <StatusBadge status={c.status} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Card Body: Info */}
+                                                <div className="mb-3">
+                                                    <h3 className="font-bold text-slate-800 text-sm truncate" title={c.institution}>{c.institution}</h3>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase truncate mb-2">{c.reference}</p>
+                                                    
+                                                    <div className="bg-slate-50 rounded-lg p-2 space-y-1">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase">Buyer</span>
+                                                            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]">{c.buyerName}</span>
+                                                        </div>
+                                                        <div className="w-full h-px bg-slate-200"></div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase">Seller</span>
+                                                            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]">{c.sellerName}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 w-auto justify-end">
-                                                    <button onClick={() => openStatusModal(c)} className="status-btn"><StatusBadge status={c.status} /></button>
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => printSingleCase(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-xl transition-all"><Icon name="printer" size={18} /></button>
-                                                        <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
-                                                        <button onClick={() => openModify(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-500 rounded-xl transition-all"><Icon name="edit-3" size={18} /></button>
+
+                                                {/* Card Footer: Date & Actions */}
+                                                <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-slate-300 uppercase">{dateLabel}</span>
+                                                        <span className="text-[9px] font-black text-blue-600">{displayDate}</span>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => printSingleCase(c)} className="p-1.5 bg-white border text-slate-400 hover:text-slate-800 hover:border-slate-300 rounded-lg transition-all" title="Print"><Icon name="printer" size={14} /></button>
+                                                        <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-1.5 bg-white border text-slate-400 hover:text-blue-600 hover:border-blue-300 rounded-lg transition-all" title="View"><Icon name="eye" size={14} /></button>
+                                                        <button onClick={() => openModify(c)} className="p-1.5 bg-white border text-slate-400 hover:text-amber-500 hover:border-amber-300 rounded-lg transition-all" title="Edit"><Icon name="edit-3" size={14} /></button>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
                                 </div>
-                                {filteredData.length > visibleCount && (<button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-400 uppercase text-xs hover:bg-slate-50 transition-all tracking-widest shadow-sm">Load More Records ({filteredData.length - visibleCount} Remaining)</button>)}
+                                
+                                {filteredData.length > visibleCount && (
+                                    <button onClick={() => setVisibleCount(prev => prev + 20)} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-black text-slate-400 uppercase text-[10px] hover:bg-slate-50 transition-all tracking-widest shadow-sm">
+                                        Load More ({filteredData.length - visibleCount})
+                                    </button>
+                                )}
                             </div>
                         )}
                         {currentView === 'details' && selectedCase && (
