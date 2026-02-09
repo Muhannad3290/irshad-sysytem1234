@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IRSHAD SYSTEM | Registry v10.2 (Case Type Update)</title>
+    <title>IRSHAD SYSTEM | Registry v10.3 (Print Feature)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -170,7 +170,6 @@
             // --- STATE MANAGEMENT ---
             const [bankList, setBankList] = useState(['ADCB', 'Mashreq Bank', 'CBD', 'NBF', 'Ajman Bank', 'Dubai Islamic Bank']);
             const [statusList, setStatusList] = useState(['Pending', 'Under Process', 'Processed', 'Delivered']);
-            // UPDATED: Added State for Case Types
             const [caseTypeList, setCaseTypeList] = useState(['Sale', 'Mortgage', 'Gift', 'Evaluation']);
             
             const [customHeadings, setCustomHeadings] = useState([]);
@@ -295,15 +294,61 @@
                         const data = docSnap.data();
                         if(data.banks) setBankList(data.banks);
                         if(data.statuses) setStatusList(data.statuses);
-                        
-                        // UPDATED: Load Case Types from Database
                         if(data.caseTypes) setCaseTypeList(data.caseTypes);
-                        
                         if(data.headings) setCustomHeadings(data.headings);
                     }
                 });
                 return () => { unsubCases(); unsubTrash(); unsubSettings(); };
             }, [user, firebaseReady]);
+
+            // --- SINGLE CASE PRINT FUNCTION ---
+            const printSingleCase = (c) => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Header
+                doc.setFontSize(16);
+                doc.text("IRSHAD SYSTEM - CASE RECORD", 14, 20);
+                
+                doc.setFontSize(10);
+                doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 27);
+                
+                // Prepare Main Data
+                const rows = [];
+                SYSTEM_FIELDS.forEach(field => {
+                    if(c[field.key]) rows.push([field.label, c[field.key]]);
+                });
+                
+                // Add Custom Data
+                if(c.customData) {
+                    Object.keys(c.customData).forEach(key => {
+                        rows.push([key, c.customData[key]]);
+                    });
+                }
+                
+                doc.autoTable({
+                    head: [['Field', 'Details']],
+                    body: rows,
+                    startY: 35,
+                    theme: 'grid',
+                    headStyles: { fillColor: [30, 41, 59] }
+                });
+
+                // Cheques Table (if present)
+                if (c.cheques && c.cheques.length > 0) {
+                    const chequeRows = c.cheques.map((ch, i) => [i+1, ch.number, ch.date, ch.amount, ch.beneficiary]);
+                    doc.text(`Cheque Details (${c.cheques.length})`, 14, doc.lastAutoTable.finalY + 15);
+                    doc.autoTable({
+                        head: [['#', 'Number', 'Date', 'Amount', 'Beneficiary']],
+                        body: chequeRows,
+                        startY: doc.lastAutoTable.finalY + 20,
+                        theme: 'striped',
+                        headStyles: { fillColor: [71, 85, 105] }
+                    });
+                }
+                
+                doc.save(`Case_Record_${c.serialNo}.pdf`);
+            };
 
             const confirmStatusUpdate = async () => {
                 if (!statusTarget || !selectedNewStatus) return;
@@ -739,7 +784,7 @@
                                                                 <td className="py-6 pr-6"><div className="flex flex-col"><span className="font-black text-slate-800 text-sm tracking-tight">{c.institution || "-"}</span><span className="text-[9px] font-black text-blue-500 uppercase mt-0.5">{c.caseType}</span></div></td>
                                                                 <td className="py-6 pr-6"><div className="flex flex-col gap-1"><div className="flex items-center gap-2"><span className="w-10 text-[8px] font-black text-slate-300 uppercase">Buyer</span><span className="text-[11px] font-bold text-slate-700 uppercase truncate max-w-[140px]">{c.buyerName || "—"}</span></div><div className="flex items-center gap-2 border-t border-slate-50 pt-1"><span className="w-10 text-[8px] font-black text-slate-300 uppercase">Seller</span><span className="text-[11px] font-bold text-slate-600 uppercase truncate max-w-[140px]">{c.sellerName || "—"}</span></div></div></td>
                                                                 <td className="py-6 pr-6"><div className="flex flex-col"><button onClick={() => openStatusModal(c)} className="status-btn self-start"><StatusBadge status={c.status} /></button><span className="text-[8px] font-bold text-slate-400 mt-1.5 ml-1">{displayDate}</span></div></td>
-                                                                <td className="py-6 text-right pr-4"><div className="flex items-center justify-end gap-1"><button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm rounded-xl transition-all"><Icon name="eye" size={16}/></button><button onClick={() => openModify(c)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-amber-500 hover:border-amber-200 hover:shadow-sm rounded-xl transition-all"><Icon name="edit-3" size={16}/></button><button onClick={() => softDelete(c.id)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-sm rounded-xl transition-all"><Icon name="trash-2" size={16}/></button></div></td>
+                                                                <td className="py-6 text-right pr-4"><div className="flex items-center justify-end gap-1"><button onClick={() => printSingleCase(c)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-slate-800 hover:border-slate-300 hover:shadow-sm rounded-xl transition-all"><Icon name="printer" size={16}/></button><button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm rounded-xl transition-all"><Icon name="eye" size={16}/></button><button onClick={() => openModify(c)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-amber-500 hover:border-amber-200 hover:shadow-sm rounded-xl transition-all"><Icon name="edit-3" size={16}/></button><button onClick={() => softDelete(c.id)} className="p-2.5 bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-sm rounded-xl transition-all"><Icon name="trash-2" size={16}/></button></div></td>
                                                             </tr>
                                                         );
                                                     })}
@@ -779,6 +824,7 @@
                                                 <div className="flex items-center gap-2 w-auto justify-end">
                                                     <button onClick={() => openStatusModal(c)} className="status-btn"><StatusBadge status={c.status} /></button>
                                                     <div className="flex gap-2">
+                                                        <button onClick={() => printSingleCase(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-xl transition-all"><Icon name="printer" size={18} /></button>
                                                         <button onClick={() => { setSelectedCase(c); setCurrentView('details'); }} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Icon name="eye" size={18} /></button>
                                                         <button onClick={() => openModify(c)} className="p-3 bg-slate-50 text-slate-400 hover:text-amber-500 rounded-xl transition-all"><Icon name="edit-3" size={18} /></button>
                                                     </div>
